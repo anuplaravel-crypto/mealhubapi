@@ -196,33 +196,36 @@ MealHubApi is a Laravel REST API backend. The frontend is a **React SPA in a sep
 
 - **Framework**: Laravel 12 (upgrade path to 13 expected)
 - **Auth**: Laravel Sanctum (token-based API authentication, not session/cookie SPA auth unless the React app is later served same-site)
-- **Database**: MySQL — **shared with the sibling [MealHub](../MealHub) Laravel app**. Both projects connect to the same `mealhub` database (see `.env`: `DB_CONNECTION=mysql`, `DB_DATABASE=mealhub`). MealHub is the origin of this schema (`Country`, `County`, `City`, `User`, `TermCondition`, `TermConditionUser`, etc.) — see [`../MealHub/database/migrations`](../MealHub/database/migrations) and [`../MealHub/app/Models`](../MealHub/app/Models).
+- **Database**: MySQL — **dedicated database**, `mealhubapi` (see `.env`: `DB_CONNECTION=mysql`, `DB_DATABASE=mealhubapi`). This is a separate database from the sibling [MealHub](../MealHub) Laravel app's `mealhub` database — the two apps no longer share a schema. MealHubApi owns and migrates its own full schema (`User`, and any other tables it needs) independently.
 - **Style**: PSR-12, enforced via Pint
 
 ## Architecture: Thin Controllers, Fat Services
 
 Controllers must only: validate (via a Form Request), delegate to a service, and shape the response. No business logic, no direct multi-step Eloquent orchestration, no conditionals beyond simple guards in a controller method.
 
-- `app/Http/Controllers/Api/{Version}/` — versioned API controllers (e.g. `app/Http/Controllers/Api/V1/`). Follow existing versioning convention once the first versioned controller exists.
-- `app/Services/` — business logic lives here. One service per domain concern (e.g. `MealPlanService`, `OrderService`), injected via constructor property promotion.
-- `app/Http/Requests/` — one Form Request per validated action (`StoreMealRequest`, `UpdateMealRequest`, etc.). Controllers must not call `$request->validate()` inline.
-- `app/Http/Resources/` — every API response that returns a model or collection goes through an Eloquent API Resource. Controllers must not return raw models or arrays built ad hoc.
-- `app/Models/` — Eloquent models. Use the `casts()` method (not the `$casts` property) for new casts, per Laravel 12 convention.
+The **authentication module is the established reference implementation** of this pattern — follow its structure for new domains (see `app/Http/Controllers/Api/V1/Auth/`, `app/Services/AuthService.php`, and [docs/controllers.md](docs/controllers.md)).
+
+- `app/Http/Controllers/Api/{Version}/` — versioned API controllers. **Versioning has started at `V1`**; put new versioned controllers under `app/Http/Controllers/Api/V1/`, grouped in a sub-namespace by domain when a domain has several (e.g. `Api/V1/Auth/`). Share behavior across related controllers via an abstract base controller rather than copy-paste (see `Auth/BaseAuthController`).
+- `app/Services/` — business logic lives here, injected via constructor property promotion. `AuthService` is the current example. One service per domain concern.
+- `app/Http/Requests/` — one Form Request per validated action, grouped by domain (e.g. `app/Http/Requests/Auth/`). Controllers must not call `$request->validate()` inline. `authorize()` returns `true` for public/pre-auth endpoints.
+- `app/Http/Resources/` — every API response that returns a model or collection goes through an Eloquent API Resource (`UserResource` is the current example). Controllers must not return raw models or arrays built ad hoc.
+- `app/Http/Traits/` — shared HTTP concerns (currently the `ApiResponse` envelope trait; see "Consistent JSON API Responses" below).
+- `app/Notifications/` — mail/database notifications (currently `OtpNotification`, used for registration and password-reset OTP emails).
+- `app/Models/` — Eloquent models. Use the `casts()` method (not the `$casts` property) for new casts, per Laravel 12 convention. See [docs/models.md](docs/models.md) for the current schema and relationships.
 
 Before adding a new service, action, or resource, search the codebase for an existing one that already covers the behavior (or most of it) and extend/reuse it instead of duplicating logic. This includes shared query scopes, form request rules, and resource transformations.
 
-## Shared Database with MealHub
+## Independent Database from MealHub
 
-MealHubApi and MealHub point at the **same MySQL database** (`mealhub`). MealHub owns the canonical schema and already has migrations for `countries`, `counties`, `cities`, `users`, `term_conditions`, and `term_condition_users`.
+MealHubApi has its **own dedicated MySQL database** (`mealhubapi`), separate from MealHub's `mealhub` database. MealHubApi owns its full schema and is free to create, modify, and migrate any table it needs (`users`, domain tables, Sanctum's `personal_access_tokens`, etc.) without coordinating with MealHub.
 
-- **Never write a MealHubApi migration that creates or redefines a table MealHub already owns.** Check [`../MealHub/database/migrations`](../MealHub/database/migrations) before creating any migration here.
-- MealHubApi migrations should only add tables/columns that are genuinely API-specific (e.g. Sanctum's `personal_access_tokens`, API-only pivot/config tables) and don't already exist via MealHub.
-- Mirror MealHub's existing model definitions (fillable, casts, relationships) for shared tables like `User` rather than redefining them differently — check [`../MealHub/app/Models`](../MealHub/app/Models) first. Divergent model definitions against the same table are a common source of subtle bugs.
-- Because the schema is shared, coordinate schema changes with MealHub — a migration run in one app affects the other immediately.
+- MealHubApi's own migrations are the source of truth for its schema — there's no shared-table constraint to check against MealHub's migrations anymore.
+- Model definitions (fillable, casts, relationships) should reflect MealHubApi's own schema and needs; they no longer need to mirror MealHub's models.
+- If the two apps need to exchange data going forward, that should happen over an API or explicit sync mechanism, not a shared database connection.
 
 ## Consistent JSON API Responses
 
-All API responses must follow one predictable envelope. Until a shared response helper/trait exists, the first one added should live in `app/Http` (e.g. a `ApiResponse` trait or a base `ApiController`) and every subsequent controller/service must reuse it rather than hand-rolling `response()->json()` calls with differing shapes.
+All API responses follow one predictable envelope, implemented by the **`App\Http\Traits\ApiResponse` trait** (`successResponse()` / `errorResponse()`). Controllers `use` it rather than hand-rolling `response()->json()` calls with differing shapes. Framework-thrown errors (validation, auth, 404, 500, …) are reshaped into this **same** envelope for every `api/*` route by the exception handler in `bootstrap/app.php` (`withExceptions` → `shouldRenderJsonWhen` + `respond`), so controllers never format those by hand.
 
 Success:
 ```json
@@ -250,22 +253,21 @@ Use standard HTTP status codes (200/201/204, 401/403/404/422, 500) alongside the
 - Protect authenticated routes with the `auth:sanctum` middleware in `routes/api.php`.
 - Never log, echo, or return raw plaintext tokens outside of the initial issuance response.
 
+**Implemented and role-scoped.** The four roles (`customer`, `admin`, `restaurant`, `rider`) share one `users` table and each have their own registration/verify-otp/login/forgot-password/reset-password/logout endpoints under `/api/v1` (customer at the root; admin/restaurant/rider under a path prefix). `AuthService` scopes every lookup by role, so credentials for one role are never valid at another's endpoints. Registration and password reset are **OTP-based** (6-digit code emailed via `OtpNotification`), not link-based. Full behavior lives in [docs/features/authentication.md](docs/features/authentication.md) — reference it rather than restating the rules here.
+
 ## Testing
 
 - Every API endpoint (each route + each meaningful outcome: happy path, validation failure, authorization failure, not-found) needs a Feature test under `tests/Feature/`. Follow the existing PHPUnit conventions in this file (already using `--phpunit` style tests per the Boost rules above).
 - Use model factories for all test data; add factory states instead of manually overriding attributes inline when a pattern repeats.
 - Do not consider a feature done until its tests exist and pass.
 
-## Documentation Per Feature
+## Documentation
 
-For every feature (new endpoint, service, or significant behavior change), add or update a short Markdown doc under `docs/features/`, named after the feature (e.g. `docs/features/meal-plans.md`). Each doc should cover, briefly:
+The `docs/` tree is the project's living documentation, kept in sync by the `/project-docs` skill (this `/update-claude-md` command maintains CLAUDE.md only — the two never overlap). It is rendered as a site with **MkDocs + Material** (`mkdocs.yml`, `requirements-docs.txt`; run `mkdocs serve` to preview). The docs are plain Markdown — MkDocs only renders them.
 
-- What the feature does and why
-- Endpoints (method, path, auth requirement)
-- Request/response shape (reference the Form Request and Resource used)
-- Notable edge cases or business rules
-
-Keep these short and current — update the existing doc rather than leaving a stale one when behavior changes.
+- **Per-feature docs** (`docs/features/<feature>.md`) — one per domain concern. For every feature (new endpoint, service, or significant behavior change), add or update the doc: what it does and why, endpoints (method/path/auth), request/response shape (reference the Form Request and Resource used), and notable edge cases/business rules. Keep them short and current.
+- **Reference docs** — `docs/architecture.md`, `docs/controllers.md`, `docs/models.md`, `docs/routes.md` describe the project as a whole. Update the relevant one when you add/change a controller, model, route, or convention.
+- A **`.githooks/pre-commit`** reminder warns (non-blocking) when code under `app/`, `routes/`, or `database/migrations/` is staged without any `docs/` change. Enable per-clone with `git config core.hooksPath .githooks`.
 
 ## Don't Duplicate Code
 

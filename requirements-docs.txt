@@ -1,0 +1,5 @@
+# Documentation toolchain (MkDocs + Material theme).
+# Install with:  pip install -r requirements-docs.txt
+# Preview:       mkdocs serve      (http://127.0.0.1:8000)
+# Build static:  mkdocs build      (outputs to ./site, which is gitignored)
+mkdocs-material>=9.5

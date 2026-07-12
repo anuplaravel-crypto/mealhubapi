@@ -1,0 +1,52 @@
+site_name: MealHubApi Documentation
+site_description: Reference and feature documentation for the MealHubApi Laravel REST API.
+repo_url: https://github.com/anuplaravel-crypto/mealhubapi
+repo_name: anuplaravel-crypto/mealhubapi
+docs_dir: docs
+edit_uri: edit/main/docs/
+
+theme:
+  name: material
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to light mode
+  features:
+    - navigation.instant
+    - navigation.tracking
+    - navigation.sections
+    - navigation.top
+    - toc.follow
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+
+markdown_extensions:
+  - admonition
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.superfences
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+
+plugins:
+  - search
+
+nav:
+  - Home: README.md
+  - Reference:
+      - Architecture: architecture.md
+      - Controllers: controllers.md
+      - Models: models.md
+      - Routes: routes.md
+  - Features:
+      - Authentication: features/authentication.md

@@ -1,0 +1,29 @@
+#!/bin/sh
+#
+# Reminder hook: warns when code changed but no docs were updated, per
+# CLAUDE.md's "Documentation Per Feature" rule. This never blocks a commit —
+# it only prints a reminder so docs don't silently drift from the code.
+#
+# Enabled via a version-controlled hooks path (see .githooks/README.md):
+#     git config core.hooksPath .githooks
+
+staged=$(git diff --cached --name-only --diff-filter=ACMR)
+
+code_changed=$(printf '%s\n' "$staged" | grep -E '^(app/|routes/|database/migrations/)' || true)
+docs_changed=$(printf '%s\n' "$staged" | grep -E '^docs/' || true)
+
+if [ -n "$code_changed" ] && [ -z "$docs_changed" ]; then
+    printf '\n'
+    printf '⚠️  Docs reminder\n'
+    printf '   You staged changes under app/, routes/, or database/migrations/,\n'
+    printf '   but no docs/ file is staged.\n'
+    printf '\n'
+    printf '   If this change adds or alters an endpoint, controller, model, route,\n'
+    printf '   or business rule, update the relevant docs (see docs/) or run\n'
+    printf '   /project-docs, then re-stage them.\n'
+    printf '\n'
+    printf '   This is only a reminder — the commit will proceed.\n'
+    printf '\n'
+fi
+
+exit 0
