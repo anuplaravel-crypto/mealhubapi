@@ -2,16 +2,19 @@
 
 namespace App\Models;
 
-// use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Laravel\Sanctum\HasApiTokens;
 
 class User extends Authenticatable
 {
     /** @use HasFactory<UserFactory> */
-    use HasFactory, Notifiable;
+    use HasApiTokens, HasFactory, Notifiable;
 
     /**
      * The attributes that are mass assignable.
@@ -19,9 +22,30 @@ class User extends Authenticatable
      * @var list<string>
      */
     protected $fillable = [
-        'name',
+        'firstName',
+        'lastName',
         'email',
+        'mobile',
+        'preferred_language',
+        'image',
+        'role',
         'password',
+        'accept_registration_tnc',
+        'marketing_consent',
+        'otp',
+        'otp_expires_at',
+        'status',
+        'is_email_verified',
+        'address1',
+        'address2',
+        'zip_code',
+        'doc_image1',
+        'doc_image2',
+        'latitude',
+        'longitude',
+        'country_id',
+        'county_id',
+        'city_id',
     ];
 
     /**
@@ -32,6 +56,7 @@ class User extends Authenticatable
     protected $hidden = [
         'password',
         'remember_token',
+        'otp',
     ];
 
     /**
@@ -42,8 +67,47 @@ class User extends Authenticatable
     protected function casts(): array
     {
         return [
-            'email_verified_at' => 'datetime',
             'password' => 'hashed',
+            'otp_expires_at' => 'datetime',
+            'accept_registration_tnc' => 'boolean',
+            'marketing_consent' => 'boolean',
+            'status' => 'boolean',
+            'is_email_verified' => 'boolean',
+            'latitude' => 'decimal:8',
+            'longitude' => 'decimal:8',
         ];
+    }
+
+    public function country(): BelongsTo
+    {
+        return $this->belongsTo(Country::class);
+    }
+
+    public function county(): BelongsTo
+    {
+        return $this->belongsTo(County::class);
+    }
+
+    public function city(): BelongsTo
+    {
+        return $this->belongsTo(City::class);
+    }
+
+    /**
+     * Terms & conditions documents this user has accepted (via term_condition_users pivot).
+     */
+    public function acceptedTerms(): BelongsToMany
+    {
+        return $this->belongsToMany(TermCondition::class, 'term_condition_users')
+            ->withPivot('accepted_at', 'ip_address')
+            ->withTimestamps();
+    }
+
+    /**
+     * Terms & conditions documents this user authored (admin only).
+     */
+    public function authoredTerms(): HasMany
+    {
+        return $this->hasMany(TermCondition::class, 'created_by');
     }
 }
