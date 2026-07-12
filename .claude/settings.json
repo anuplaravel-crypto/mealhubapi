@@ -1,0 +1,55 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(php artisan route:list*)",
+      "Bash(vendor/bin/pint*)",
+      "Bash(php artisan test*)",
+      "Bash(git status*)",
+      "Bash(git diff*)",
+      "Bash(git log*)",
+      "Read(//C:/xampp/htdocs/PROJECT-BY-CLAUDE/MealHubApi/**)",
+      "Read(//C:/xampp/htdocs/PROJECT-BY-CLAUDE/MealHub/**)",
+      "Edit(app/**)",
+      "Edit(database/migrations/**)",
+      "Edit(database/seeders/**)",
+      "Edit(database/factories/**)",
+      "Edit(routes/**)",
+      "Edit(tests/**)",
+      "Edit(docs/**)",
+      "Edit(.claude/commands/**)",
+      "Edit(.claude/skills/**)",
+      "Edit(CLAUDE.md)",
+      "Bash(php artisan make:*)",
+      "Bash(php artisan migrate*)",
+      "Bash(php artisan db:seed*)"
+    ],
+    "deny": [
+      "Bash(git push*)",
+      "Bash(git reset --hard*)",
+      "Bash(git checkout -- *)",
+      "Bash(rm -rf*)",
+      "Bash(php artisan migrate:reset*)",
+      "Bash(php artisan tinker*)",
+      "Bash(composer remove*)",
+      "Bash(npm uninstall*)",
+      "Edit(.env)",
+      "Edit(.env.*)",
+      "Edit(config/**)",
+      "Edit(composer.json)",
+      "Edit(composer.lock)"
+    ]
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "vendor/bin/pint --dirty --format agent"
+          }
+        ]
+      }
+    ]
+  }
+}
