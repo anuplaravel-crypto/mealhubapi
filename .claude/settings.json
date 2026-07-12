@@ -19,12 +19,14 @@
       "Edit(.claude/commands/**)",
       "Edit(.claude/skills/**)",
       "Edit(CLAUDE.md)",
+      "Edit(config/app.php)",
       "Bash(php artisan make:*)",
       "Bash(php artisan migrate*)",
       "Bash(php artisan db:seed*)"
     ],
     "deny": [
-      "Bash(git push*)",
+      "Bash(git push --force*)",
+      "Bash(git push -f*)",
       "Bash(git reset --hard*)",
       "Bash(git checkout -- *)",
       "Bash(rm -rf*)",
@@ -34,7 +36,16 @@
       "Bash(npm uninstall*)",
       "Edit(.env)",
       "Edit(.env.*)",
-      "Edit(config/**)",
+      "Edit(config/auth.php)",
+      "Edit(config/cache.php)",
+      "Edit(config/database.php)",
+      "Edit(config/filesystems.php)",
+      "Edit(config/logging.php)",
+      "Edit(config/mail.php)",
+      "Edit(config/queue.php)",
+      "Edit(config/sanctum.php)",
+      "Edit(config/services.php)",
+      "Edit(config/session.php)",
       "Edit(composer.json)",
       "Edit(composer.lock)"
     ]
