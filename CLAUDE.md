@@ -263,10 +263,10 @@ Use standard HTTP status codes (200/201/204, 401/403/404/422, 500) alongside the
 
 ## Documentation
 
-The `docs/` tree is the project's living documentation, kept in sync by the `/project-docs` skill (this `/update-claude-md` command maintains CLAUDE.md only — the two never overlap). It is rendered as a site with **MkDocs + Material** (`mkdocs.yml`, `requirements-docs.txt`; run `mkdocs serve` to preview). The docs are plain Markdown — MkDocs only renders them.
+The `docs/` tree is the project's living documentation, rendered as a site with **MkDocs + Material** (`mkdocs.yml`, `requirements-docs.txt`; run `mkdocs serve` to preview). It has two kinds of files, maintained two different ways:
 
-- **Per-feature docs** (`docs/features/<feature>.md`) — one per domain concern. For every feature (new endpoint, service, or significant behavior change), add or update the doc: what it does and why, endpoints (method/path/auth), request/response shape (reference the Form Request and Resource used), and notable edge cases/business rules. Keep them short and current.
-- **Reference docs** — `docs/architecture.md`, `docs/controllers.md`, `docs/models.md`, `docs/routes.md` describe the project as a whole. Update the relevant one when you add/change a controller, model, route, or convention.
+- **Auto-generated reference docs** — `docs/architecture.md`, `docs/controllers.md`, `docs/models.md`, `docs/routes.md`, and `docs/README.md` are produced by **`php artisan docs:generate`** (the `app/Services/Docs/` extractor/renderer engine), which runs automatically on every file edit via the PostToolUse hook. **Never hand-edit these** (they carry a "do not hand-edit" banner and would be overwritten) — if the content is wrong, fix the extractor/renderer in `app/Services/Docs/`. `docs:generate --check` fails if they're stale (for CI).
+- **Hand-written per-feature docs** (`docs/features/<feature>.md`) — one per domain concern, maintained by the `/project-docs` skill. For every feature, add/update: what it does and why, endpoints, request/response shape (reference the Form Request and Resource), and business rules/edge cases. These carry the intent the generator can't introspect.
 - A **`.githooks/pre-commit`** reminder warns (non-blocking) when code under `app/`, `routes/`, or `database/migrations/` is staged without any `docs/` change. Enable per-clone with `git config core.hooksPath .githooks`.
 
 ## Don't Duplicate Code
