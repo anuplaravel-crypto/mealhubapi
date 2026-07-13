@@ -2,11 +2,17 @@
   "permissions": {
     "allow": [
       "Bash(php artisan route:list*)",
+      "Bash(php artisan docs:generate*)",
       "Bash(vendor/bin/pint*)",
       "Bash(php artisan test*)",
       "Bash(git status*)",
       "Bash(git diff*)",
       "Bash(git log*)",
+      "Bash(git add*)",
+      "Bash(git commit*)",
+      "Bash(git push*)",
+      "Bash(git rev-parse*)",
+      "Bash(git branch*)",
       "Read(//C:/xampp/htdocs/PROJECT-BY-CLAUDE/MealHubApi/**)",
       "Read(//C:/xampp/htdocs/PROJECT-BY-CLAUDE/MealHub/**)",
       "Edit(app/**)",
@@ -19,14 +25,11 @@
       "Edit(.claude/commands/**)",
       "Edit(.claude/skills/**)",
       "Edit(CLAUDE.md)",
-      "Edit(config/app.php)",
       "Bash(php artisan make:*)",
       "Bash(php artisan migrate*)",
       "Bash(php artisan db:seed*)"
     ],
     "deny": [
-      "Bash(git push --force*)",
-      "Bash(git push -f*)",
       "Bash(git reset --hard*)",
       "Bash(git checkout -- *)",
       "Bash(rm -rf*)",
@@ -36,16 +39,7 @@
       "Bash(npm uninstall*)",
       "Edit(.env)",
       "Edit(.env.*)",
-      "Edit(config/auth.php)",
-      "Edit(config/cache.php)",
-      "Edit(config/database.php)",
-      "Edit(config/filesystems.php)",
-      "Edit(config/logging.php)",
-      "Edit(config/mail.php)",
-      "Edit(config/queue.php)",
-      "Edit(config/sanctum.php)",
-      "Edit(config/services.php)",
-      "Edit(config/session.php)",
+      "Edit(config/**)",
       "Edit(composer.json)",
       "Edit(composer.lock)"
     ]
@@ -57,7 +51,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "vendor/bin/pint --dirty --format agent"
+            "command": "vendor/bin/pint --dirty --format agent; php artisan docs:generate --silent"
           }
         ]
       }
