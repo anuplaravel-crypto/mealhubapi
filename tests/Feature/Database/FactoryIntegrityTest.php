@@ -2,6 +2,9 @@
 
 namespace Tests\Feature\Database;
 
+use App\Models\City;
+use App\Models\Country;
+use App\Models\County;
 use App\Models\FeaturedRestaurant;
 use App\Models\HomeSection;
 use App\Models\HomeStat;
@@ -48,6 +51,28 @@ class FactoryIntegrityTest extends TestCase
     {
         foreach (User::factory()->count(25)->create() as $user) {
             $this->assertLessThanOrEqual(20, strlen($user->mobile));
+        }
+    }
+
+    /**
+     * All three name columns are varchar(50) and SQLite will not complain, so
+     * assert the lengths directly — same reasoning as the mobile column above.
+     */
+    public function test_location_factories_build_the_cascade(): void
+    {
+        $country = Country::factory()->withCascade(counties: 3, cities: 4)->create();
+
+        $this->assertCount(3, $country->counties);
+        $this->assertCount(4, $country->counties->first()->cities);
+
+        $county = County::factory()->forCountry($country)->create();
+        $this->assertSame($country->id, $county->country_id);
+        $this->assertSame($county->id, City::factory()->forCounty($county)->create()->county_id);
+
+        foreach ([Country::all(), County::all(), City::all()] as $rows) {
+            foreach ($rows as $row) {
+                $this->assertLessThanOrEqual(50, strlen($row->name));
+            }
         }
     }
 

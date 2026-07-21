@@ -41,8 +41,6 @@
 **File:** `app/Models/Country.php`  
 **Table:** `countries`
 
-> Not referenced by any routed controller found — this model has no active read/write path today.
-
 **Columns** (live schema)
 
 | Column | Type | Nullable |
@@ -72,8 +70,6 @@
 
 **File:** `app/Models/County.php`  
 **Table:** `counties`
-
-> Not referenced by any routed controller found — this model has no active read/write path today.
 
 **Columns** (live schema)
 

@@ -66,7 +66,7 @@ it, Phase 10 or 11 would mean "any logged-in customer can edit the home page".
 ```
 0. Foundations ✅
    │
-1. Auth hardening ✅ ┬─→ 2. Geo reference (public)          1b. Mobile OTP (deferred)
+1. Auth hardening ✅ ┬─→ 2. Geo reference (public) ✅       1b. Mobile OTP (deferred)
                     ├─→ 3. Public Home CMS (public, read-only)
                     └─→ 4. Media foundation ──┬─→ 5. Profile
                                               ├─→ 8. Rider vehicle
@@ -265,23 +265,42 @@ mobile OTP a 5-minute TTL rather than the 10 minutes used for email.
 
 ---
 
-## Phase 2 — Geo reference data (public, read-only)
+## Phase 2 — Geo reference data (public, read-only) ✅ Complete
 
 Zero dependencies, and MealHubReact's registration form is blocked without it.
+`php artisan test --compact`: 112 passed.
 
 | Category | Work |
 | --- | --- |
-| Controllers | `Api/V1/LocationController` — `countries()`, `counties()`, `cities()` (ports `Frontend\PagesController`; do not carry over its `getCiiesByCounty` typo) |
-| Services | `LocationService` (port) |
-| Repositories | `LocationRepository` (port) |
-| Models | ✅ `Country`, `County`, `City` |
+| Controllers | ✅ `Api/V1/LocationController` — `countries()`, `counties()`, `cities()` (ports `Frontend\PagesController`; the `getCiiesByCounty` typo was not carried over) |
+| Services | ✅ `LocationService` — flat under `app/Services/`, matching `AuthService`, not MealHub's `Services/Location/` sub-namespace |
+| Repositories | ✅ `LocationRepository`, rebased on `BaseRepository<Country>` |
+| Models | ✅ `Country`, `County`, `City` — `HasFactory` added to all three |
 | FormRequests | — (bound path parameters only) |
-| Resources | `CountryResource`, `CountyResource`, `CityResource` |
+| Resources | ✅ `CountryResource`, `CountyResource`, `CityResource` |
 | Policies / Notifications / Events | — |
-| Routes | `GET v1/countries`, `v1/countries/{country}/counties`, `v1/counties/{county}/cities` — public. Prefer nested REST paths over MealHub's flat `cities/{countyId}`. |
-| Seeders / Factories | ✅ `LocationSeeder` (3 countries / 8 counties / 24 cities) |
-| Feature Tests | `tests/Feature/Location/LocationTest.php` — happy path, empty child list, 404 on unknown parent |
-| Documentation | New `docs/features/locations.md` |
+| Routes | ✅ `GET v1/countries`, `v1/countries/{country}/counties`, `v1/counties/{county}/cities` — public, nested rather than MealHub's flat `cities/{countyId}` |
+| Seeders / Factories | ✅ `LocationSeeder` (3 countries / 8 counties / 24 cities), plus net-new `Country`/`County`/`City` factories |
+| Feature Tests | ✅ `tests/Feature/Location/LocationTest.php` (11 tests); factory states added to `FactoryIntegrityTest` |
+| Documentation | ✅ [features/locations.md](features/locations.md) |
+
+**Three decisions worth keeping:**
+
+- **`LocationRepository` extends `BaseRepository<Country>`** — the root of the hierarchy — and the
+  two child lookups query **through the parent's relation** (`$country->counties()`), not
+  `County::query()->where(...)`. The scoping then cannot be forgotten at a call site, and no second
+  repository class is needed for what is one cascade.
+- **A parent with no children is `200` + `[]`, not `404`.** Only an unknown parent id is a 404, and
+  it comes from route-model binding rather than a rule — which is why this phase adds no Form
+  Request. This is the first bound path parameter in the codebase, so it is also the first live
+  exercise of Phase 0.3's `NotFoundHttpException` remap.
+- **No pagination.** The whole tree is 35 rows and a dropdown needs every option at once; paging a
+  cascade would make the client fetch pages to find an option.
+
+**Factories were net-new** despite the table above saying "Seeders / Factories ✅" — `LocationSeeder`
+alone cannot express "a country with no counties", which the empty-child-list test needs. Country
+and county names use `fake()->unique()`, since a cascade with two identically named siblings is
+indistinguishable to a client.
 
 ---
 

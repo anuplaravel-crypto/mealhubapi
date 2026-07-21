@@ -4,6 +4,7 @@ use App\Http\Controllers\Api\V1\Auth\AdminAuthController;
 use App\Http\Controllers\Api\V1\Auth\CustomerAuthController;
 use App\Http\Controllers\Api\V1\Auth\RestaurantAuthController;
 use App\Http\Controllers\Api\V1\Auth\RiderAuthController;
+use App\Http\Controllers\Api\V1\LocationController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -49,4 +50,21 @@ Route::prefix('v1')->name('api.v1.')->group(function () use ($registerAuthRoutes
     $registerAuthRoutes(AdminAuthController::class, 'admin', 'admin');
     $registerAuthRoutes(RestaurantAuthController::class, 'restaurant', 'restaurant');
     $registerAuthRoutes(RiderAuthController::class, 'rider', 'rider');
+
+    /*
+    |----------------------------------------------------------------------
+    | Geo reference data (public, read-only)
+    |----------------------------------------------------------------------
+    |
+    | The country -> county -> city cascade every registration form drives.
+    | Public reference data with no per-user content, so no auth. The nested
+    | paths express the hierarchy the client walks; an unknown parent id is a
+    | 404 from route-model binding.
+    |
+    */
+    Route::controller(LocationController::class)->group(function () {
+        Route::get('countries', 'countries')->name('countries.index');
+        Route::get('countries/{country}/counties', 'counties')->name('countries.counties.index');
+        Route::get('counties/{county}/cities', 'cities')->name('counties.cities.index');
+    });
 });

@@ -357,6 +357,21 @@ Admins register with a reduced field set and are created pre-verified,
 
 ---
 
+## Api\V1\LocationController
+
+**File:** `app/Http/Controllers/Api/V1/LocationController.php`
+
+### `cities(County $county): JsonResponse`
+
+
+### `counties(Country $country): JsonResponse`
+
+
+### `countries(): JsonResponse`
+
+
+---
+
 ## Laravel\Sanctum\Http\Controllers\CsrfCookieController
 
 **File:** `Laravel/Sanctum/Http/Controllers/CsrfCookieController.php`
