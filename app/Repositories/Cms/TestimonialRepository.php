@@ -3,15 +3,14 @@
 namespace App\Repositories\Cms;
 
 use App\Models\Testimonial;
-use App\Repositories\BaseRepository;
 use Illuminate\Database\Eloquent\Collection;
 
 /**
  * Every Eloquent query against the testimonials table.
  *
- * @extends BaseRepository<Testimonial>
+ * @extends BaseCmsRepository<Testimonial>
  */
-class TestimonialRepository extends BaseRepository
+class TestimonialRepository extends BaseCmsRepository
 {
     protected function model(): string
     {

@@ -4,6 +4,83 @@
 
 Only controllers reachable from a registered route are documented here — see [routes.md](routes.md) for the full route table.
 
+## Api\V1\Admin\Cms\SiteSettingController
+
+**File:** `app/Http/Controllers/Api/V1/Admin/Cms/SiteSettingController.php`
+
+### `show(): JsonResponse`
+
+
+### `update(UpdateSiteSettingRequest $request): JsonResponse`
+
+**Request body**
+
+| Field | Rules |
+|---|---|
+| site_name | `required|string|max:100` |
+| brand_primary_text | `required|string|max:60` |
+| brand_accent_text | `nullable|string|max:60` |
+| meta_title | `nullable|string|max:160` |
+| meta_description | `nullable|string|max:320` |
+| footer_blurb | `nullable|string|max:1000` |
+| logo | `nullable|image|mimes:jpg,jpeg,png,webp|max:2048` |
+
+
+---
+
+## Api\V1\Admin\Cms\TestimonialController
+
+**File:** `app/Http/Controllers/Api/V1/Admin/Cms/TestimonialController.php`
+
+### `destroy(int $id): JsonResponse`
+
+Remove a row outright, along with any image it owns.
+
+
+### `index(): JsonResponse`
+
+Every row in display order.
+
+
+### `store(SaveTestimonialRequest $request): JsonResponse`
+
+**Request body**
+
+| Field | Rules |
+|---|---|
+| quote | `required|string|max:1000` |
+| author_name | `required|string|max:100` |
+| author_role | `nullable|string|max:100` |
+| avatar | `nullable|image|mimes:jpg,jpeg,png,webp|max:2048` |
+| avatar_url | `nullable|url|max:500` |
+| rating | `required|numeric|between:0,5` |
+| is_published | `nullable|boolean` |
+| sort_order | `nullable|integer|min:0` |
+
+
+### `toggle(int $id): JsonResponse`
+
+Show or hide a row on the public page.
+
+
+### `update(SaveTestimonialRequest $request, int $id): JsonResponse`
+
+**Request body**
+
+| Field | Rules |
+|---|---|
+| quote | `required|string|max:1000` |
+| author_name | `required|string|max:100` |
+| author_role | `nullable|string|max:100` |
+| avatar | `nullable|image|mimes:jpg,jpeg,png,webp|max:2048` |
+| avatar_url | `nullable|url|max:500` |
+| rating | `required|numeric|between:0,5` |
+| is_published | `nullable|boolean` |
+| sort_order | `nullable|integer|min:0` |
+
+
+---
+
 ## Api\V1\Admin\NewsletterController
 
 **File:** `app/Http/Controllers/Api/V1/Admin/NewsletterController.php`

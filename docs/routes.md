@@ -9,6 +9,13 @@ Every application route is defined in `routes/api.php` and auto-prefixed with `/
 | Method | URI | Name | Handler | Middleware |
 |---|---|---|---|---|
 | POST | `/api/v1/admin/change-password` | api.v1.admin.change-password | AdminAuthController@changePassword | api, auth:sanctum, role:admin |
+| GET | `/api/v1/admin/cms/site-settings` | api.v1.admin.cms.site-settings.show | SiteSettingController@show | api, auth:sanctum, role:admin |
+| POST | `/api/v1/admin/cms/site-settings` | api.v1.admin.cms.site-settings.update | SiteSettingController@update | api, auth:sanctum, role:admin |
+| GET | `/api/v1/admin/cms/testimonials` | api.v1.admin.cms.testimonials.index | TestimonialController@index | api, auth:sanctum, role:admin |
+| POST | `/api/v1/admin/cms/testimonials` | api.v1.admin.cms.testimonials.store | TestimonialController@store | api, auth:sanctum, role:admin |
+| POST | `/api/v1/admin/cms/testimonials/{id}` | api.v1.admin.cms.testimonials.update | TestimonialController@update | api, auth:sanctum, role:admin |
+| DELETE | `/api/v1/admin/cms/testimonials/{id}` | api.v1.admin.cms.testimonials.destroy | TestimonialController@destroy | api, auth:sanctum, role:admin |
+| PATCH | `/api/v1/admin/cms/testimonials/{id}/toggle` | api.v1.admin.cms.testimonials.toggle | TestimonialController@toggle | api, auth:sanctum, role:admin |
 | POST | `/api/v1/admin/forgot-password` | api.v1.admin.forgot-password | AdminAuthController@forgotPassword | api, throttle:6,1 |
 | POST | `/api/v1/admin/login` | api.v1.admin.login | AdminAuthController@login | api, throttle:6,1 |
 | POST | `/api/v1/admin/logout` | api.v1.admin.logout | AdminAuthController@logout | api, auth:sanctum, role:admin |

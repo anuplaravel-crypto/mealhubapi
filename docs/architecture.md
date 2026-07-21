@@ -9,6 +9,7 @@ This is a stateless JSON REST API (no Blade views of its own). It is three-tier:
 
 - `Api/V1/`
 - `Api/V1/Admin/`
+- `Api/V1/Admin/Cms/`
 - `Api/V1/Auth/`
 - `Api/V1/Restaurant/`
 - `Api/V1/Rider/`

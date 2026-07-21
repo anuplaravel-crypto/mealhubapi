@@ -25,13 +25,35 @@ class SiteSettingRepository extends BaseRepository
      * only caller today is an anonymous public GET, and a read endpoint that
      * writes on first hit is a surprise in an API. The defaults still matter —
      * a freshly migrated database answers `/api/v1/home` with the site's own
-     * branding rather than nulls. Phase 10's admin update is where the row is
-     * actually persisted.
+     * branding rather than nulls. {@see self::persist()} is where the row is
+     * actually written, and only an admin's save reaches it.
      */
     public function current(): SiteSetting
     {
         return $this->find(SiteSetting::SINGLETON_ID)
             ?? $this->model()::make(self::defaults());
+    }
+
+    /**
+     * Write the settings, creating the singleton row on the first save.
+     *
+     * The one path that may insert into this table, which is what keeps it a
+     * singleton — there is deliberately no `create()` caller and no store
+     * endpoint. The key is force-filled rather than mass-assigned because `id`
+     * is not fillable: without pinning it, a first save on a table whose
+     * auto-increment has already advanced would create a row
+     * {@see self::current()} could never find again.
+     *
+     * @param  array<string, mixed>  $attributes
+     */
+    public function persist(array $attributes): SiteSetting
+    {
+        $settings = $this->find(SiteSetting::SINGLETON_ID)
+            ?? $this->model()::make()->forceFill(['id' => SiteSetting::SINGLETON_ID]);
+
+        $settings->fill($attributes)->save();
+
+        return $settings;
     }
 
     /**

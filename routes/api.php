@@ -1,5 +1,7 @@
 <?php
 
+use App\Http\Controllers\Api\V1\Admin\Cms\SiteSettingController as CmsSiteSettingController;
+use App\Http\Controllers\Api\V1\Admin\Cms\TestimonialController as CmsTestimonialController;
 use App\Http\Controllers\Api\V1\Admin\NewsletterController as AdminNewsletterController;
 use App\Http\Controllers\Api\V1\Admin\RestaurantDocumentController as AdminRestaurantDocumentController;
 use App\Http\Controllers\Api\V1\Auth\AdminAuthController;
@@ -250,5 +252,47 @@ Route::prefix('v1')->name('api.v1.')->group(function () use ($registerAuthRoutes
         ->group(function () {
             Route::get('/', 'index')->name('index');
             Route::delete('{subscriber}', 'destroy')->name('destroy');
+        });
+
+    /*
+    |----------------------------------------------------------------------
+    | Home CMS administration
+    |----------------------------------------------------------------------
+    |
+    | The write half of the content an anonymous visitor reads at v1/home.
+    | `role:admin` is the whole authorization question — a CMS record has no
+    | owner, so the ids below need no Policy, exactly as the newsletter
+    | delete above does not. Anything with an *owner* still does.
+    |
+    | Edits are POST rather than PUT wherever the payload can carry a file:
+    | PHP populates no uploaded-file bag on a PUT body, which is the same
+    | constraint the rider vehicle and restaurant document upserts answer.
+    | Everything else keeps a real verb — PATCH for a one-field toggle,
+    | DELETE for a removal — so MealHub's `POST .../{id}/delete` Blade
+    | workaround does not survive the port.
+    |
+    | Site settings is a singleton: read and save, with no list, create,
+    | delete or toggle to route.
+    |
+    */
+    Route::middleware(['auth:sanctum', 'role:admin'])
+        ->prefix('admin/cms')
+        ->name('admin.cms.')
+        ->group(function () {
+            Route::controller(CmsSiteSettingController::class)->group(function () {
+                Route::get('site-settings', 'show')->name('site-settings.show');
+                Route::post('site-settings', 'update')->name('site-settings.update');
+            });
+
+            Route::controller(CmsTestimonialController::class)
+                ->prefix('testimonials')
+                ->name('testimonials.')
+                ->group(function () {
+                    Route::get('/', 'index')->name('index');
+                    Route::post('/', 'store')->name('store');
+                    Route::post('{id}', 'update')->whereNumber('id')->name('update');
+                    Route::patch('{id}/toggle', 'toggle')->whereNumber('id')->name('toggle');
+                    Route::delete('{id}', 'destroy')->whereNumber('id')->name('destroy');
+                });
         });
 });
