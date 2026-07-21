@@ -27,6 +27,16 @@ class RiderVehicle extends Model
     public const VEHICLE_TYPES = ['bike', 'car', 'scooter', 'bicycle'];
 
     /**
+     * Storage collection vehicle photos are written to.
+     *
+     * Like {@see User::IMAGE_COLLECTION} this is only the leaf: a vehicle photo
+     * shows a named person's registration plate, so it is personal data on the
+     * private disk under the owning role — `rider/vehicle`. The prefixing
+     * happens in `RiderVehicleService`, which is the only writer.
+     */
+    public const IMAGE_COLLECTION = 'vehicle';
+
+    /**
      * The attributes that are mass assignable.
      *
      * @var list<string>

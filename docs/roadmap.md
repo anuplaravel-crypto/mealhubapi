@@ -69,7 +69,7 @@ it, Phase 10 or 11 would mean "any logged-in customer can edit the home page".
 1. Auth hardening ✅ ┬─→ 2. Geo reference (public) ✅       1b. Mobile OTP (deferred)
                     ├─→ 3. Public Home CMS (public, read-only) ✅
                     └─→ 4. Media foundation ✅┬─→ 5. Profile ✅
-                                              ├─→ 8. Rider vehicle
+                                              ├─→ 8. Rider vehicle ✅
                                               ├─→ 9. Restaurant documents
                                               └─→ 10. Admin CMS write
                          6. Notifications ✅ ──┴─→ 11. Admin user mgmt ─→ 12. Dashboards
@@ -129,7 +129,7 @@ domain — see the table below.
 | `Cms/SectionFeatureRepository` | 10 — reads go through `HomeSectionRepository`'s eager load |
 | `NotificationRepository` | 6 ✅ |
 | `NewsletterSubscriberRepository` | 7 ✅ |
-| `RiderVehicleRepository` | 8 |
+| `RiderVehicleRepository` | 8 ✅ |
 | `CustomerRepository`, `RestaurantRepository`, `RiderRepository` | 11 |
 
 ### 0.2 Standard API response format
@@ -556,26 +556,60 @@ reshape the 429 body into its own JSON envelope. Phase 0's handler already does 
 
 ---
 
-## Phase 8 — Rider vehicle
+## Phase 8 — Rider vehicle ✅ Complete
+
+The first phase where the media foundation is reused by a domain other than the one that
+built it. `php artisan test --compact`: 310 passed.
+
+**Deviation: `RiderVehiclePolicy` was not built.** Nothing in this phase takes an id from the URL —
+a rider has exactly one vehicle and reaches it through their own token, so every lookup is keyed on
+`$request->user()` and the class would have had no route to bind to. The half the roadmap named
+that *does* need it ("admin may read any") is Phase 11's read of a named rider, which takes an id
+and must bring the Policy with it. Same reasoning as Phase 0's dropped `PasswordResetRepository`,
+Phase 3's `SectionFeatureRepository` and Phase 4's deferred `MediaController@show`.
 
 | Category | Work |
 | --- | --- |
-| Controllers | `Api/V1/Rider/VehicleController` — `show`, `save` (port) |
-| Services | `Rider/RiderVehicleService` (port) |
-| Repositories | `RiderVehicleRepository` (port) |
-| Models | ✅ `RiderVehicle`; `User::vehicles()` relation already added |
-| FormRequests | `Rider/SaveVehicleRequest` (port) |
-| Resources | `RiderVehicleResource` (Phase 4 image trait) |
-| Policies | `RiderVehiclePolicy` — rider owns their vehicle; admin may read any |
-| Routes | `v1/rider/vehicle` under `auth:sanctum` + `role:rider` |
-| Notifications | `RiderVehicleUpdatedNotification` → admin (port) |
+| Controllers | ✅ `Api/V1/Rider/VehicleController` — `show`, `save`, plus a net-new `image` streaming action |
+| Services | ✅ `RiderVehicleService` — flat under `app/Services/`, not the `Services/Rider/` sub-namespace above. One class is not a sub-namespace, same call as `NewsletterService`. |
+| Repositories | ✅ `RiderVehicleRepository`, rebased on `BaseRepository<RiderVehicle>` — `forRider()` and `updateOrCreateForRider()`. MealHub's `setActiveForRider()` was **not** ported: its only caller is Phase 11's approval toggle. |
+| Models | ✅ `RiderVehicle` — plus `IMAGE_COLLECTION = 'vehicle'`, the leaf the owning role prefixes |
+| FormRequests | ✅ `Rider/SaveVehicleRequest`, on Phase 4's `ValidatesUploadedImage`. MealHub's `failedValidation()` override was not ported — the handler in `bootstrap/app.php` already shapes 422. |
+| Resources | ✅ `RiderVehicleResource` — see the image note below; `ResolvesImageUrl` does **not** apply |
+| Policies | ⏸ `RiderVehiclePolicy` deferred to Phase 11 — see above |
+| Routes | ✅ `GET`/`POST v1/rider/vehicle` and `GET v1/rider/vehicle/image` under `auth:sanctum` + `role:rider` |
+| Notifications | ✅ `RiderVehicleUpdatedNotification` → every admin, flat under `app/Notifications/` and built on Phase 6's `Concerns/FormatsUserDetails` — the reuse that trait was kept for |
 | Events | — |
-| Seeders / Factories | ✅ `RiderVehicleFactory` |
-| Feature Tests | `tests/Feature/Rider/VehicleTest.php` — port `RiderVehicleFlowTest`, add role-gate and cross-rider 403 |
-| Documentation | New `docs/features/rider-onboarding.md` |
+| Seeders / Factories | ✅ `RiderVehicleFactory` (unchanged) |
+| Feature Tests | ✅ `tests/Feature/Rider/VehicleTest.php` (36), including the role gate on all three routes |
+| Documentation | ✅ [features/rider-onboarding.md](features/rider-onboarding.md), listed in `mkdocs.yml` `nav:` |
 
-**Business rule to preserve:** `is_active` tracks `users.status`, flipped by an admin on approval
-(Phase 11) — never by the rider.
+**Four decisions worth keeping:**
+
+- **`is_active` is derived, not defaulted.** The roadmap's rule — it tracks `users.status`, flipped
+  by an admin on approval, never by the rider — is enforced by the service computing it from the
+  rider's status on every save. MealHub passed only the validated payload to `updateOrCreate`, so
+  the column's `default(true)` stood: a rider registers with `status = false`, and their vehicle
+  claimed to be live for an account that was not. Re-deriving on every save also stops an edit
+  resurrecting the flag on a deactivated rider.
+- **The vehicle photo is a private file, and the column finally has a writer.** MealHub's
+  `SaveVehicleRequest` had no `image` field at all, so `rider_vehicles.image` was dead. A photo of a
+  named person's registration plate is personal data, so it goes to `MediaPlacement::Personal` under
+  `rider/vehicle/{variant}/{filename}` and comes back only through an authenticated stream — the
+  same treatment as a profile picture, and the reason `ResolvesImageUrl` (hard-wired to the public
+  `Cms` placement) cannot be used here.
+- **That stream lives on the domain's controller, not `MediaController`.** CLAUDE.md's parenthetical
+  names `MediaController` because it was the only private reader; keeping each domain's read next to
+  the rules that produced the file is what Phase 9's planned `Restaurant/DocumentController@show`
+  already assumes. `MediaController@show` stays the profile-picture path.
+- **Uniqueness of a plate is validated, because the index does not cover it.** The migration's
+  comment claims `[rider_id, registration_number]` stops two riders claiming the same plate; it does
+  not — it only stops one rider holding it twice, which the upsert already prevents. The Form
+  Request scopes a `unique` rule to *other* riders, so a collision is a 422 on the field while
+  resubmitting your own unchanged plate stays a valid edit.
+
+**No `migrate:fresh --seed` was strictly needed** — this phase adds no migration and no factory —
+but it was run against MySQL anyway, since the phase writes the first non-avatar private files.
 
 ---
 

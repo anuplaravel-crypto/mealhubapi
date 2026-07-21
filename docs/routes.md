@@ -43,6 +43,9 @@ Every application route is defined in `routes/api.php` and auto-prefixed with `/
 | POST | `/api/v1/rider/registration` | api.v1.rider.registration | RiderAuthController@register | api |
 | POST | `/api/v1/rider/resend-otp` | api.v1.rider.resend-otp | RiderAuthController@resendOtp | api, throttle:6,1 |
 | POST | `/api/v1/rider/reset-password` | api.v1.rider.reset-password | RiderAuthController@resetPassword | api, throttle:6,1 |
+| GET | `/api/v1/rider/vehicle` | api.v1.rider.vehicle.show | VehicleController@show | api, auth:sanctum, role:rider |
+| POST | `/api/v1/rider/vehicle` | api.v1.rider.vehicle.save | VehicleController@save | api, auth:sanctum, role:rider |
+| GET | `/api/v1/rider/vehicle/image` | api.v1.rider.vehicle.image | VehicleController@image | api, auth:sanctum, role:rider |
 | POST | `/api/v1/rider/verify-otp` | api.v1.rider.verify-otp | RiderAuthController@verifyOtp | api, throttle:6,1 |
 
 ## Customer / public

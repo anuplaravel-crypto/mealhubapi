@@ -507,6 +507,38 @@ Separate from {@see self::update()} so changing a photo does not submit
 
 ---
 
+## Api\V1\Rider\VehicleController
+
+**File:** `app/Http/Controllers/Api/V1/Rider/VehicleController.php`
+
+### `image(Request $request): StreamedResponse`
+
+Stream the rider's own vehicle photo.
+
+
+### `save(SaveVehicleRequest $request): JsonResponse`
+
+Create or update the vehicle — one endpoint for both, because a rider has
+
+**Request body**
+
+| Field | Rules |
+|---|---|
+| vehicle_type | `required|In` |
+| registration_number | `required|string|max:50|Unique` |
+| vehicle_brand | `required|string|max:50` |
+| vehicle_model | `required|string|max:50` |
+| vehicle_color | `required|string|max:30` |
+| image | `nullable|image|mimes:jpg,jpeg,png,webp|max:2048` |
+
+
+### `show(Request $request): JsonResponse`
+
+The rider's registered vehicle. A rider who has not submitted one yet
+
+
+---
+
 ## Laravel\Sanctum\Http\Controllers\CsrfCookieController
 
 **File:** `Laravel/Sanctum/Http/Controllers/CsrfCookieController.php`

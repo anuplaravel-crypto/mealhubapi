@@ -11,6 +11,7 @@ use App\Http\Controllers\Api\V1\MediaController;
 use App\Http\Controllers\Api\V1\NewsletterController;
 use App\Http\Controllers\Api\V1\NotificationController;
 use App\Http\Controllers\Api\V1\ProfileController;
+use App\Http\Controllers\Api\V1\Rider\VehicleController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -156,6 +157,35 @@ Route::prefix('v1')->name('api.v1.')->group(function () use ($registerAuthRoutes
             Route::post('subscribe', 'subscribe')->middleware('throttle:5,1')->name('subscribe');
             Route::post('confirm/{token}', 'confirm')->middleware('throttle:10,1')->name('confirm');
             Route::post('unsubscribe/{token}', 'unsubscribe')->middleware('throttle:10,1')->name('unsubscribe');
+        });
+
+    /*
+    |----------------------------------------------------------------------
+    | Rider vehicle (rider only)
+    |----------------------------------------------------------------------
+    |
+    | Rider onboarding's one extra step: the vehicle an admin verifies before
+    | activating the account. Unlike the profile and notification routes this
+    | is not something every role has a version of, so `role:rider` is a real
+    | gate rather than a list of all four.
+    |
+    | No id appears in any of the three paths — a rider has exactly one
+    | vehicle and reaches it through their own token — so none of them needs a
+    | Policy. The admin read of a *named* rider's vehicle arrives in Phase 11,
+    | and takes an id, and must bring one with it.
+    |
+    | `save` is POST for both create and update: the record is an upsert, and
+    | PHP does not populate an uploaded file bag on a PUT body.
+    |
+    */
+    Route::middleware(['auth:sanctum', 'role:rider'])
+        ->controller(VehicleController::class)
+        ->prefix('rider/vehicle')
+        ->name('rider.vehicle.')
+        ->group(function () {
+            Route::get('/', 'show')->name('show');
+            Route::post('/', 'save')->name('save');
+            Route::get('image', 'image')->name('image');
         });
 
     /*

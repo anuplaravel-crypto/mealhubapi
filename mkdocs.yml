@@ -64,6 +64,7 @@ nav:
       - Profile: features/profile.md
       - Notifications: features/notifications.md
       - Newsletter: features/newsletter.md
+      - Rider Onboarding: features/rider-onboarding.md
 
   - Testing:
       - Postman Testing: postman-testing.md

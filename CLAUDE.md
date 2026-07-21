@@ -291,7 +291,7 @@ The gate reads `users.role` on every request rather than using Sanctum token abi
 
 ## Domain Models Beyond Auth
 
-The whole schema is ported; the HTTP layer is being built domain by domain (`php artisan route:list --path=api` is the truth). Roadmap phases 0–6 have shipped.
+The whole schema is ported; the HTTP layer is being built domain by domain (`php artisan route:list --path=api` is the truth). Roadmap phases 0–8 have shipped.
 
 **Live API surface** — each has a hand-written doc; reference it rather than restating the rules:
 
@@ -299,12 +299,12 @@ The whole schema is ported; the HTTP layer is being built domain by domain (`php
 - **Home-page CMS** — `SiteSetting` (singleton), `HomeStat`, `NavMenu`, `HomeSection` + `SectionFeature`, `MealCategory`, `FeaturedRestaurant`, `Testimonial`. Seeded with the content MealHub's public home page ships, so a client rendering from these produces the same site. **Read-only so far** — one anonymous `GET v1/home`; the admin write surface is Phase 10. See [docs/features/home-cms.md](docs/features/home-cms.md).
 - **Profile** — self-service account maintenance for all four roles, plus the private-image read path. See [docs/features/profile.md](docs/features/profile.md).
 - **Notifications** — the in-app list, unread badge and read/delete actions for all four roles (Laravel's `DatabaseNotification`, no custom model), plus the admin-facing registration notice and the `UserStatusChanged` seam Phase 11 will fire. Home of the first Policy. See [docs/features/notifications.md](docs/features/notifications.md).
+- **Newsletter** — `NewsletterSubscriber` (double opt-in; `status` and `is_mailable` derived from the two timestamps, never stored), the three public token endpoints, and the admin list/delete. See [docs/features/newsletter.md](docs/features/newsletter.md).
+- **Rider onboarding** — `RiderVehicle` (one per rider, `User::vehicles()`), read and upserted by the rider, photographed onto the private disk, and announced to the admins on every save. `is_active` is **derived from the rider's `users.status`** by `RiderVehicleService`, never sent by the rider; an admin flips it on approval (Phase 11). See [docs/features/rider-onboarding.md](docs/features/rider-onboarding.md).
 
 **Schema only — models, migrations, factories and seed data, but no controllers, services, Form Requests, Resources, or routes.** When you build their API, follow the auth module's thin-controller/fat-service pattern.
 
 - **Terms & conditions** — `TermCondition` (role-scoped, versioned, `is_active`, authored by an admin via `created_by`) and the `TermConditionUser` pivot recording acceptance (`accepted_at`, `ip_address`). `User::acceptedTerms()` / `authoredTerms()` and `TermCondition::scopeActiveForRole()` are the entry points. Registration already captures `accept_registration_tnc` / `marketing_consent` on `User`.
-- **Rider onboarding** — `RiderVehicle` (one per rider, `User::vehicles()`). `is_active` is meant to track the rider's `users.status`, which an admin flips on approval.
-- **Newsletter** — `NewsletterSubscriber` (double opt-in; `status` and `is_mailable` are derived from the two timestamps, never stored).
 
 ### Ported from MealHub — decisions that must not be undone
 
@@ -353,17 +353,19 @@ should keep returning exactly what it returns today: writes only inside `ImageUp
   `Storage::put()`, `Storage::putFile()`, `Storage::disk()->put()` or `Storage::delete()` from a
   Controller, Service, Repository or Resource — every write, replacement and deletion goes through
   the service. Reads are the deliberate exception: `ResolvesImageUrl` calls `Storage::disk()->url()`
-  and `MediaController` calls `Storage::disk()->response()`, because building a URL and streaming a
-  file are not writes. Both still take their *path* from `MediaPlacement`.
+  and the streaming controllers call `Storage::disk()->response()`, because building a URL and
+  streaming a file are not writes. Both still take their *path* from `MediaPlacement`.
 - **Never concatenate a storage path by hand.** `MediaPlacement` is the only source of disk
   selection, directory structure, variant naming and path generation; build every path with
   `MediaPlacement::path()` (or `pathFor()` on the service, which existence-checks it too).
 - **Public media returns absolute URLs; private media never exposes a path.** Public today means
   CMS imagery (site branding, sections, meal categories, featured restaurants, testimonials) and
   whatever later CMS-style collections arrive — banners, product and category art. Private means
-  profile avatars now and restaurant documents in Phase 9. A Resource for a private file exposes an
-  **application endpoint** and the file is streamed through an authorization check; a filesystem
-  location must never reach a client.
+  profile avatars and rider vehicle photos now, and restaurant documents in Phase 9. A Resource for
+  a private file exposes an **application endpoint** and the file is streamed through an
+  authorization check; a filesystem location must never reach a client. The stream lives on the
+  controller owning that domain (`MediaController` for avatars, `Rider\VehicleController` for
+  vehicle photos), so each file's authorization sits next to the rules that produced it.
 - **Replacement is an argument, never a follow-up delete.** Always
   `ImageUploadService::store(..., replacing: $oldImage)`. Uploading first and deleting the old file
   afterwards at the call site is prohibited: four phases each replace images, and one forgetting
