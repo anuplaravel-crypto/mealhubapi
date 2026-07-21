@@ -55,6 +55,7 @@ Every application route is defined in `routes/api.php` and auto-prefixed with `/
 | GET | `/api/v1/countries` | api.v1.countries.index | LocationController@countries | api |
 | GET | `/api/v1/countries/{country}/counties` | api.v1.countries.counties.index | LocationController@counties | api |
 | POST | `/api/v1/forgot-password` | api.v1.customer.forgot-password | CustomerAuthController@forgotPassword | api, throttle:6,1 |
+| GET | `/api/v1/home` | api.v1.home | HomeController@index | api |
 | POST | `/api/v1/login` | api.v1.customer.login | CustomerAuthController@login | api, throttle:6,1 |
 | POST | `/api/v1/logout` | api.v1.customer.logout | CustomerAuthController@logout | api, auth:sanctum, role:customer |
 | POST | `/api/v1/registration` | api.v1.customer.registration | CustomerAuthController@register | api |

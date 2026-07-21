@@ -67,7 +67,7 @@ it, Phase 10 or 11 would mean "any logged-in customer can edit the home page".
 0. Foundations ✅
    │
 1. Auth hardening ✅ ┬─→ 2. Geo reference (public) ✅       1b. Mobile OTP (deferred)
-                    ├─→ 3. Public Home CMS (public, read-only)
+                    ├─→ 3. Public Home CMS (public, read-only) ✅
                     └─→ 4. Media foundation ──┬─→ 5. Profile
                                               ├─→ 8. Rider vehicle
                                               ├─→ 9. Restaurant documents
@@ -125,7 +125,8 @@ domain — see the table below.
 | --- | --- |
 | `UserRepository` | 0 → 1 |
 | `LocationRepository` | 2 |
-| `Cms/*` (8 classes) | 3 (read) → 10 (write) |
+| `Cms/*` (7 read classes) | 3 (read) → 10 (write) |
+| `Cms/SectionFeatureRepository` | 10 — reads go through `HomeSectionRepository`'s eager load |
 | `NotificationRepository` | 6 |
 | `NewsletterSubscriberRepository` | 7 |
 | `RiderVehicleRepository` | 8 |
@@ -304,24 +305,50 @@ indistinguishable to a client.
 
 ---
 
-## Phase 3 — Public Home CMS (read-only)
+## Phase 3 — Public Home CMS (read-only) ✅ Complete
 
 Unblocks the entire React public site with no auth and no uploads — the highest value per unit
-of work in the roadmap.
+of work in the roadmap. `php artisan test --compact`: 140 passed.
 
 | Category | Work |
 | --- | --- |
-| Controllers | `Api/V1/HomeController@index` — one endpoint returning the whole home payload |
-| Services | `Cms/HomePageService` (port; it already aggregates all eight CMS models) |
-| Repositories | `Cms/*Repository` × 8 (port, read methods only) |
+| Controllers | ✅ `Api/V1/HomeController@index` — one endpoint returning the whole home payload |
+| Services | ✅ `Cms/HomePageService`, absorbing MealHub's view composer as well as its service — see the note below |
+| Repositories | ✅ `Cms/*Repository` × **7**, all rebased on `BaseRepository`, read methods only. `SectionFeatureRepository` was **not** built — see the deviation below. |
 | Models | ✅ all 8 |
-| FormRequests | — |
-| Resources | The critical deliverable. `SiteSettingResource`, `NavMenuResource`, `HomeStatResource`, `HomeSectionResource` (nesting `SectionFeatureResource`), `MealCategoryResource`, `FeaturedRestaurantResource`, `TestimonialResource`. Per CLAUDE.md, resolving `image` + `image_url` into one absolute URL is the **Resource's** job — models deliberately do not. Build a shared `Concerns/ResolvesImageUrl` trait here; Phases 5, 8, 9, 10 reuse it. |
+| FormRequests | — (the endpoint takes no input at all) |
+| Resources | ✅ `SiteSettingResource`, `NavMenuResource`, `HomeStatResource`, `HomeSectionResource` (nesting `SectionFeatureResource`), `MealCategoryResource`, `FeaturedRestaurantResource`, `TestimonialResource`, plus the shared `Resources/Concerns/ResolvesImageUrl` trait Phases 5, 8, 9 and 10 reuse |
 | Policies / Notifications / Events | — |
-| Routes | `GET v1/home` — public. Add per-resource public reads only if React genuinely needs them separately. |
+| Routes | ✅ `GET v1/home` — public. No per-resource reads added; nothing has asked for one yet. |
 | Seeders / Factories | ✅ |
-| Feature Tests | `tests/Feature/Cms/PublicHomeTest.php` — full payload shape, unpublished rows excluded, sort order respected, image URLs absolute. Port assertions from MealHub's `HomePageCmsTest`. |
-| Documentation | New `docs/features/home-cms.md` |
+| Feature Tests | ✅ `tests/Feature/Cms/PublicHomeTest.php` (28 tests), including the query-count assertion |
+| Documentation | ✅ [features/home-cms.md](features/home-cms.md) |
+
+**Deviation: `SectionFeatureRepository` was not built.** Reads reach features through
+`HomeSectionRepository::publishedKeyed()`'s eager load, and MealHub's class holds only write paths
+plus `nextSortOrder()` — so building it now would have meant an empty class. It arrives in Phase 10
+with the write surface that needs it. Same reasoning as Phase 0's dropped `PasswordResetRepository`.
+
+**Five decisions worth keeping:**
+
+- **`SiteSettingRepository::current()` does not `firstOrCreate`.** MealHub's did, which is how an
+  unseeded database still rendered its branding — but the only caller here is an anonymous public
+  GET, and a read endpoint that writes on first hit is a surprise in an API. It returns an unsaved
+  instance carrying the defaults instead; Phase 10's admin update persists the row.
+- **Branding and navigation are in the payload, not a separate call.** MealHub kept them out of
+  `HomePageService` because a view composer already pushed them into the shared layout, which the
+  auth pages needed too. A cross-origin SPA has no layout to compose into, so that split would just
+  mean two round trips for one screen.
+- **Every list is guaranteed present, even when empty.** An absent key is `undefined` in JavaScript
+  and throws on `.map()`, so `menusByLocation()` re-adds the locations `groupBy()` dropped, and the
+  two stat placements fall back to empty collections. `sections` is deliberately the exception — it
+  is looked up by key, never iterated.
+- **Featured restaurants ship as one flat list**, not MealHub's pre-chunked carousel slides: how
+  many cards make a slide is a DOM decision the client owns. `user_id` is not exposed either.
+- **The image layout is now pinned by `ResolvesImageUrl`:** `cms/{collection}/{variant}/{filename}`
+  on the `public` disk, absolute URLs, uploaded file beating external link. Phase 4's
+  `ImageUploadService` **must write to this same layout** — nothing but a docblock enforces the
+  agreement across the two classes.
 
 ---
 

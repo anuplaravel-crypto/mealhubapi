@@ -357,6 +357,15 @@ Admins register with a reduced field set and are created pre-verified,
 
 ---
 
+## Api\V1\HomeController
+
+**File:** `app/Http/Controllers/Api/V1/HomeController.php`
+
+### `index(): JsonResponse`
+
+
+---
+
 ## Api\V1\LocationController
 
 **File:** `app/Http/Controllers/Api/V1/LocationController.php`

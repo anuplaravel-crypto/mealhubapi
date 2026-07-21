@@ -4,6 +4,7 @@ use App\Http\Controllers\Api\V1\Auth\AdminAuthController;
 use App\Http\Controllers\Api\V1\Auth\CustomerAuthController;
 use App\Http\Controllers\Api\V1\Auth\RestaurantAuthController;
 use App\Http\Controllers\Api\V1\Auth\RiderAuthController;
+use App\Http\Controllers\Api\V1\HomeController;
 use App\Http\Controllers\Api\V1\LocationController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
@@ -67,4 +68,17 @@ Route::prefix('v1')->name('api.v1.')->group(function () use ($registerAuthRoutes
         Route::get('countries/{country}/counties', 'counties')->name('countries.counties.index');
         Route::get('counties/{county}/cities', 'cities')->name('counties.cities.index');
     });
+
+    /*
+    |----------------------------------------------------------------------
+    | Public home CMS (public, read-only)
+    |----------------------------------------------------------------------
+    |
+    | Everything the marketing home page renders — branding, navigation,
+    | stats, sections, meal categories, featured restaurants and reviews —
+    | in one anonymous read. Published content only; the admin write surface
+    | arrives in Phase 10 under v1/admin/cms.
+    |
+    */
+    Route::get('home', [HomeController::class, 'index'])->name('home');
 });

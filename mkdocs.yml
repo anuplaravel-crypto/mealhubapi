@@ -59,6 +59,7 @@ nav:
       - API Conventions: features/api-conventions.md
       - Authentication: features/authentication.md
       - Locations: features/locations.md
+      - Home CMS: features/home-cms.md
 
   - Testing:
       - Postman Testing: postman-testing.md
