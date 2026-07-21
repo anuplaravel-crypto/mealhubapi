@@ -10,6 +10,7 @@ This is a stateless JSON REST API (no Blade views of its own). It is three-tier:
 - `Api/V1/`
 - `Api/V1/Admin/`
 - `Api/V1/Auth/`
+- `Api/V1/Restaurant/`
 - `Api/V1/Rider/`
 
 ## Authentication
@@ -81,6 +82,5 @@ The `users.role` column (`enum('admin','restaurant','customer','rider')`) discri
 - `TermCondition` model exists but is not referenced by any routed controller.
 - `TermConditionUser` model exists but is not referenced by any routed controller.
 - `Testimonial` model exists but is not referenced by any routed controller.
-- `User` model exists but is not referenced by any routed controller.
 - Composer package `laravel/tinker` is installed but no matching reference was found under `app/` (best-effort keyword scan — may miss indirect usage).
 

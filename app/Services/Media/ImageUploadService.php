@@ -19,6 +19,12 @@ use Intervention\Image\Interfaces\ImageInterface;
  * exists so they do not each grow their own copy of the resize-and-clean-up
  * dance, which is what happened in MealHub.
  *
+ * The one exception is a {@see MediaPlacement::PASSTHROUGH_EXTENSIONS} format —
+ * a PDF licence, today. No encoder can scale it, so it is written once as
+ * received, and every read of it resolves back to that single directory through
+ * {@see MediaPlacement::variantFor()}. The class keeps its name because its job
+ * has not changed: take an upload, store it the way its placement says.
+ *
  * What this class does *not* do is decide whether a file is acceptable — size
  * and format are validation, and live in {@see ValidatesUploadedImage} so the
  * client gets a 422 with field-level errors rather than an exception from GD.
@@ -27,15 +33,16 @@ use Intervention\Image\Interfaces\ImageInterface;
 class ImageUploadService
 {
     /**
-     * Source extensions re-encoded to themselves rather than to JPEG.
+     * Source extensions kept rather than re-encoded to JPEG.
      *
      * Flattening a transparent PNG or WebP onto JPEG's opaque canvas turns the
      * transparency black, which on a white navbar reads as a solid box where
-     * the logo should be.
+     * the logo should be. PDF is here for a different reason — there is no
+     * encoder to convert it *to*; see {@see MediaPlacement::PASSTHROUGH_EXTENSIONS}.
      *
      * @var array<string, string>
      */
-    private const LOSSLESS_FORMATS = ['png' => 'png', 'webp' => 'webp'];
+    private const KEPT_FORMATS = ['png' => 'png', 'webp' => 'webp', 'pdf' => 'pdf'];
 
     private const ORIGINAL_QUALITY = 90;
 
@@ -60,8 +67,24 @@ class ImageUploadService
     {
         $format = $this->formatFor($file);
         $filename = Str::random(self::FILENAME_LENGTH).'.'.$format;
-        $manager = ImageManager::gd();
         $disk = Storage::disk($placement->disk());
+
+        // A format no image encoder can read is written once, as received. It
+        // has no variants, and MediaPlacement::variantFor() is what makes every
+        // later read of it resolve back to this one directory.
+        if (MediaPlacement::isPassthrough($filename)) {
+            $disk->putFileAs(
+                $placement->directory($collection, MediaPlacement::ORIGINAL_VARIANT),
+                $file,
+                $filename,
+            );
+
+            $this->delete($placement, $collection, $replacing);
+
+            return $filename;
+        }
+
+        $manager = ImageManager::gd();
 
         $disk->put(
             $placement->path($collection, MediaPlacement::ORIGINAL_VARIANT, $filename),
@@ -117,14 +140,14 @@ class ImageUploadService
             return null;
         }
 
-        $path = $placement->path($collection, $placement->resolveVariant($variant), $filename);
+        $path = $placement->path($collection, $placement->variantFor($filename, $variant), $filename);
 
         return Storage::disk($placement->disk())->exists($path) ? $path : null;
     }
 
     /**
-     * Output format for an upload: transparency-capable sources keep their own
-     * format, everything else becomes JPEG.
+     * Output format for an upload: transparency-capable sources and
+     * pass-through formats keep their own, everything else becomes JPEG.
      *
      * MealHub applied this to CMS images only and forced profile pictures to
      * JPEG, so a PNG avatar with a transparent background gained a black one.
@@ -134,7 +157,7 @@ class ImageUploadService
     {
         $extension = Str::lower((string) $file->getClientOriginalExtension());
 
-        return self::LOSSLESS_FORMATS[$extension] ?? 'jpg';
+        return self::KEPT_FORMATS[$extension] ?? 'jpg';
     }
 
     /**

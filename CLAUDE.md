@@ -219,7 +219,7 @@ The **authentication module is the established reference implementation** of the
 - `app/Http/Traits/` — shared HTTP concerns (currently the `ApiResponse` envelope trait; see "Consistent JSON API Responses" below).
 - `app/Exceptions/` — `DomainException` is the base for expected business-rule failures. Services throw it with an explicit status instead of calling `abort()` (an HTTP concern) or throwing `ValidationException` for a failure that is not a validation failure.
 - `app/Notifications/` — mail/database notifications: `OtpNotification` (registration and password-reset codes), `RegistrationNotification` (to admins), `AccountStatusNotification` (to the user). All three are **one role-parameterized class replacing MealHub's three or four** — do not re-split them per role. `Notifications/Concerns/` holds shared formatting (`FormatsUserDetails`).
-- `app/Policies/` — one class per authorized model, and **required wherever an id arrives from the URL** (`NotificationPolicy` is the only one so far). Non-`App\Models` policies must be registered in `AppServiceProvider`.
+- `app/Policies/` — **one class per authorized model, named after the model**, and required wherever an id arrives from the URL (`NotificationPolicy`, `UserPolicy`). Name it after the model, not the feature: discovery maps `App\Models\X` to `App\Policies\XPolicy`, so a feature-named class would need `Gate::policy(X::class, …)` and would then monopolise every future ability on that model. Non-`App\Models` policies (e.g. the framework's `DatabaseNotification`) must be registered in `AppServiceProvider`.
 - `app/Events/` + `app/Listeners/` — for consequences that should not be wired into the action causing them (`UserStatusChanged` → `SendAccountStatusNotification`). Listeners are auto-discovered from `app/Listeners`; verify with `php artisan event:list`.
 - `app/Models/` — Eloquent models. Use the `casts()` method (not the `$casts` property) for new casts, per Laravel 12 convention. See [docs/models.md](docs/models.md) for the current schema and relationships.
 
@@ -291,7 +291,7 @@ The gate reads `users.role` on every request rather than using Sanctum token abi
 
 ## Domain Models Beyond Auth
 
-The whole schema is ported; the HTTP layer is being built domain by domain (`php artisan route:list --path=api` is the truth). Roadmap phases 0–8 have shipped.
+The whole schema is ported; the HTTP layer is being built domain by domain (`php artisan route:list --path=api` is the truth). Roadmap phases 0–9 have shipped.
 
 **Live API surface** — each has a hand-written doc; reference it rather than restating the rules:
 
@@ -301,6 +301,7 @@ The whole schema is ported; the HTTP layer is being built domain by domain (`php
 - **Notifications** — the in-app list, unread badge and read/delete actions for all four roles (Laravel's `DatabaseNotification`, no custom model), plus the admin-facing registration notice and the `UserStatusChanged` seam Phase 11 will fire. Home of the first Policy. See [docs/features/notifications.md](docs/features/notifications.md).
 - **Newsletter** — `NewsletterSubscriber` (double opt-in; `status` and `is_mailable` derived from the two timestamps, never stored), the three public token endpoints, and the admin list/delete. See [docs/features/newsletter.md](docs/features/newsletter.md).
 - **Rider onboarding** — `RiderVehicle` (one per rider, `User::vehicles()`), read and upserted by the rider, photographed onto the private disk, and announced to the admins on every save. `is_active` is **derived from the rider's `users.status`** by `RiderVehicleService`, never sent by the rider; an admin flips it on approval (Phase 11). See [docs/features/rider-onboarding.md](docs/features/rider-onboarding.md).
+- **Restaurant documents** — the two identity documents (`users.doc_image1` / `doc_image2`) a restaurant files, plus **the first route that names another user**: an admin's read of a named restaurant's paperwork, gated by `UserPolicy@viewDocuments`. Home of the `Document` media placement and its PDF pass-through. See [docs/features/restaurant-documents.md](docs/features/restaurant-documents.md).
 
 **Schema only — models, migrations, factories and seed data, but no controllers, services, Form Requests, Resources, or routes.** When you build their API, follow the auth module's thin-controller/fat-service pattern.
 
@@ -361,17 +362,28 @@ should keep returning exactly what it returns today: writes only inside `ImageUp
 - **Public media returns absolute URLs; private media never exposes a path.** Public today means
   CMS imagery (site branding, sections, meal categories, featured restaurants, testimonials) and
   whatever later CMS-style collections arrive — banners, product and category art. Private means
-  profile avatars and rider vehicle photos now, and restaurant documents in Phase 9. A Resource for
-  a private file exposes an **application endpoint** and the file is streamed through an
-  authorization check; a filesystem location must never reach a client. The stream lives on the
-  controller owning that domain (`MediaController` for avatars, `Rider\VehicleController` for
-  vehicle photos), so each file's authorization sits next to the rules that produced it.
+  profile avatars, rider vehicle photos and restaurant documents. A Resource for a private file
+  exposes an **application endpoint** and the file is streamed through an authorization check; a
+  filesystem location must never reach a client. The stream lives on the controller owning that
+  domain (`MediaController` for avatars, `Rider\VehicleController` for vehicle photos,
+  `Restaurant\DocumentController` and `Admin\RestaurantDocumentController` for paperwork), so each
+  file's authorization sits next to the rules that produced it.
+- **A format that cannot be rasterised is a pass-through, not a rejection.**
+  `MediaPlacement::PASSTHROUGH_EXTENSIONS` (today: `pdf`) is written once under `original/` with no
+  variants, and `MediaPlacement::variantFor()` resolves *every* read of it back to that file. The
+  rule is keyed on the stored extension, never the placement — a document collection legitimately
+  holds a mix of scans and PDFs. Adding a format here means adding it to the matching request trait
+  too.
 - **Replacement is an argument, never a follow-up delete.** Always
   `ImageUploadService::store(..., replacing: $oldImage)`. Uploading first and deleting the old file
   afterwards at the call site is prohibited: four phases each replace images, and one forgetting
   leaves orphans. Cleanup order is the service's responsibility.
-- **Upload validation lives only in `ValidatesUploadedImage`.** Never restate size/format rules in
-  a Form Request; compose the trait so raising the ceiling or accepting a format stays one edit.
+- **Upload validation lives only in `Requests/Concerns/`** — `ValidatesUploadedImage` for display
+  imagery, `ValidatesUploadedDocument` for identity paperwork (adds `pdf`, 4 MB ceiling). Never
+  restate size/format rules in a Form Request; compose the trait so raising the ceiling or accepting
+  a format stays one edit. **One trait per class of file, not per feature** — a third trait is
+  justified only by genuinely different answers on format and size, never by a new domain wanting
+  its own copy.
 - **The storage layout is an architectural contract.** Changing it means changing `MediaPlacement`,
   `ImageUploadService`, `ResolvesImageUrl`, [docs/features/media-uploads.md](docs/features/media-uploads.md)
   and the feature tests **in the same commit** — the round-trip test in

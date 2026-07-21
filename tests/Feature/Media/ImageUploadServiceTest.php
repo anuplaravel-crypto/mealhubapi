@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Media;
 
+use App\Http\Requests\Concerns\ValidatesUploadedDocument;
 use App\Http\Requests\Concerns\ValidatesUploadedImage;
 use App\Http\Resources\Concerns\ResolvesImageUrl;
 use App\Models\Testimonial;
@@ -25,6 +26,7 @@ use Tests\TestCase;
 class ImageUploadServiceTest extends TestCase
 {
     use ResolvesImageUrl;
+    use ValidatesUploadedDocument;
     use ValidatesUploadedImage;
 
     private ImageUploadService $service;
@@ -82,10 +84,103 @@ class ImageUploadServiceTest extends TestCase
         Storage::disk('public')->assertDirectoryEmpty('/');
     }
 
-    public function test_it_gives_personal_and_cms_files_their_own_ceilings(): void
+    public function test_it_gives_each_placement_its_own_ceilings(): void
     {
         $this->assertSame(1600, MediaPlacement::Cms->sizes()['large']);
         $this->assertSame(800, MediaPlacement::Personal->sizes()['large']);
+        $this->assertSame(1600, MediaPlacement::Document->sizes()['large'], 'An admin has to read a licence number off a scan.');
+    }
+
+    public function test_it_stores_documents_on_the_private_disk_only(): void
+    {
+        $filename = $this->service->store(MediaPlacement::Document, 'restaurant/document', $this->upload());
+
+        Storage::disk('local')->assertExists("restaurant/document/medium/{$filename}");
+        Storage::disk('public')->assertDirectoryEmpty('/');
+    }
+
+    /**
+     * A PDF cannot be scaled by an image encoder, so it is written once as
+     * received rather than rejected — a business licence is commonly filed as
+     * one.
+     */
+    public function test_it_stores_a_pdf_once_without_variants(): void
+    {
+        $filename = $this->service->store(MediaPlacement::Document, 'restaurant/document', $this->pdf());
+
+        $this->assertStringEndsWith('.pdf', $filename);
+
+        Storage::disk('local')->assertExists("restaurant/document/original/{$filename}");
+
+        foreach (array_keys(MediaPlacement::Document->sizes()) as $variant) {
+            Storage::disk('local')->assertMissing("restaurant/document/{$variant}/{$filename}");
+        }
+    }
+
+    /**
+     * The half that makes the pass-through usable: a reader asking a PDF for a
+     * size must land on the one directory it was written to, not 404 on a path
+     * that could never have existed.
+     */
+    public function test_every_variant_of_a_pdf_resolves_to_the_original(): void
+    {
+        $filename = $this->service->store(MediaPlacement::Document, 'restaurant/document', $this->pdf());
+
+        foreach (['small', 'medium', 'large', 'gigantic', null] as $variant) {
+            $this->assertSame(
+                "restaurant/document/original/{$filename}",
+                $this->service->pathFor(MediaPlacement::Document, 'restaurant/document', $filename, $variant)
+            );
+        }
+    }
+
+    public function test_replacing_a_pdf_removes_it(): void
+    {
+        $old = $this->service->store(MediaPlacement::Document, 'restaurant/document', $this->pdf());
+
+        $new = $this->service->store(MediaPlacement::Document, 'restaurant/document', $this->pdf(), replacing: $old);
+
+        Storage::disk('local')->assertMissing("restaurant/document/original/{$old}");
+        Storage::disk('local')->assertExists("restaurant/document/original/{$new}");
+    }
+
+    /**
+     * A collection legitimately holds a mix, so replacing across formats has to
+     * clean up whichever shape the outgoing file had.
+     */
+    public function test_replacing_a_scanned_image_with_a_pdf_leaves_nothing_behind(): void
+    {
+        $old = $this->service->store(MediaPlacement::Document, 'restaurant/document', $this->upload());
+
+        $new = $this->service->store(MediaPlacement::Document, 'restaurant/document', $this->pdf(), replacing: $old);
+
+        foreach (MediaPlacement::Document->variants() as $variant) {
+            Storage::disk('local')->assertMissing("restaurant/document/{$variant}/{$old}");
+        }
+
+        Storage::disk('local')->assertExists("restaurant/document/original/{$new}");
+    }
+
+    public function test_only_pdfs_are_stored_as_uploaded(): void
+    {
+        $this->assertTrue(MediaPlacement::isPassthrough('licence.pdf'));
+        $this->assertTrue(MediaPlacement::isPassthrough('LICENCE.PDF'));
+        $this->assertFalse(MediaPlacement::isPassthrough('scan.jpg'));
+        $this->assertFalse(MediaPlacement::isPassthrough(null));
+    }
+
+    public function test_a_document_upload_allows_pdf_where_an_image_upload_does_not(): void
+    {
+        $pdf = ['file' => $this->pdf()];
+
+        $this->assertTrue(Validator::make($pdf, ['file' => $this->uploadedImageRules(required: true)])->fails());
+        $this->assertFalse(Validator::make($pdf, ['file' => $this->uploadedDocumentRules(required: true)])->fails());
+    }
+
+    public function test_a_document_gets_a_higher_ceiling_than_an_image(): void
+    {
+        $this->assertSame(4096, self::MAX_DOCUMENT_KILOBYTES);
+        $this->assertGreaterThan(self::MAX_KILOBYTES, self::MAX_DOCUMENT_KILOBYTES);
     }
 
     #[DataProvider('formatProvider')]
@@ -259,6 +354,11 @@ class ImageUploadServiceTest extends TestCase
     private function upload(string $name = 'photo.jpg', int $width = 1200, int $height = 800): UploadedFile
     {
         return UploadedFile::fake()->image($name, $width, $height);
+    }
+
+    private function pdf(string $name = 'licence.pdf'): UploadedFile
+    {
+        return UploadedFile::fake()->create($name, 120, 'application/pdf');
     }
 
     private function validate(UploadedFile $file): \Illuminate\Validation\Validator

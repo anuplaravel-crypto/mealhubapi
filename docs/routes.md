@@ -17,6 +17,7 @@ Every application route is defined in `routes/api.php` and auto-prefixed with `/
 | POST | `/api/v1/admin/registration` | api.v1.admin.registration | AdminAuthController@register | api |
 | POST | `/api/v1/admin/resend-otp` | api.v1.admin.resend-otp | AdminAuthController@resendOtp | api, throttle:6,1 |
 | POST | `/api/v1/admin/reset-password` | api.v1.admin.reset-password | AdminAuthController@resetPassword | api, throttle:6,1 |
+| GET | `/api/v1/admin/restaurants/{restaurant}/documents/{slot}` | api.v1.admin.restaurants.documents.show | RestaurantDocumentController@show | api, auth:sanctum, role:admin |
 | POST | `/api/v1/admin/verify-otp` | api.v1.admin.verify-otp | AdminAuthController@verifyOtp | api, throttle:6,1 |
 
 ## Restaurant endpoints
@@ -24,6 +25,9 @@ Every application route is defined in `routes/api.php` and auto-prefixed with `/
 | Method | URI | Name | Handler | Middleware |
 |---|---|---|---|---|
 | POST | `/api/v1/restaurant/change-password` | api.v1.restaurant.change-password | RestaurantAuthController@changePassword | api, auth:sanctum, role:restaurant |
+| GET | `/api/v1/restaurant/documents` | api.v1.restaurant.documents.show | DocumentController@show | api, auth:sanctum, role:restaurant |
+| POST | `/api/v1/restaurant/documents` | api.v1.restaurant.documents.save | DocumentController@save | api, auth:sanctum, role:restaurant |
+| GET | `/api/v1/restaurant/documents/{slot}` | api.v1.restaurant.documents.download | DocumentController@download | api, auth:sanctum, role:restaurant |
 | POST | `/api/v1/restaurant/forgot-password` | api.v1.restaurant.forgot-password | RestaurantAuthController@forgotPassword | api, throttle:6,1 |
 | POST | `/api/v1/restaurant/login` | api.v1.restaurant.login | RestaurantAuthController@login | api, throttle:6,1 |
 | POST | `/api/v1/restaurant/logout` | api.v1.restaurant.logout | RestaurantAuthController@logout | api, auth:sanctum, role:restaurant |

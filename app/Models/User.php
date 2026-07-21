@@ -27,6 +27,16 @@ class User extends Authenticatable
     public const IMAGE_COLLECTION = 'profile';
 
     /**
+     * Storage collection a restaurant's identity documents are written to.
+     *
+     * Separate from {@see self::IMAGE_COLLECTION} because the two live under
+     * different placements: an avatar is a personal image, a licence is
+     * paperwork that may arrive as a PDF. Like the image collection this is
+     * only the leaf — `RestaurantDocumentService` prefixes the owning role.
+     */
+    public const DOCUMENT_COLLECTION = 'document';
+
+    /**
      * The attributes that are mass assignable.
      *
      * @var list<string>

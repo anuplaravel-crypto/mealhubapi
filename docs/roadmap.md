@@ -70,7 +70,7 @@ it, Phase 10 or 11 would mean "any logged-in customer can edit the home page".
                     ├─→ 3. Public Home CMS (public, read-only) ✅
                     └─→ 4. Media foundation ✅┬─→ 5. Profile ✅
                                               ├─→ 8. Rider vehicle ✅
-                                              ├─→ 9. Restaurant documents
+                                              ├─→ 9. Restaurant documents ✅
                                               └─→ 10. Admin CMS write
                          6. Notifications ✅ ──┴─→ 11. Admin user mgmt ─→ 12. Dashboards
                          7. Newsletter ✅
@@ -613,22 +613,62 @@ but it was run against MySQL anyway, since the phase writes the first non-avatar
 
 ---
 
-## Phase 9 — Restaurant documents
+## Phase 9 — Restaurant documents ✅ Complete
+
+The first route that names *another user*, and therefore the first Policy on one of our own
+models. `php artisan test --compact`: 350 passed.
+
+**Deviation: the Policy is `UserPolicy`, not `RestaurantDocumentPolicy`.** Policy discovery maps
+`App\Models\User` to `App\Policies\UserPolicy`; any other name needs `Gate::policy(User::class, …)`
+in `AppServiceProvider`, which would monopolise *every* future ability on `User` for a class named
+after documents. Phase 11's admin user management adds its abilities to the same class instead.
+
+**Deviation: `RestaurantRepository` was not built.** The save path updates the caller's own row
+through `UserRepository`, and the admin read resolves its restaurant by route-model binding — so
+the class would have been empty. It arrives in Phase 11 with the listing queries that need it. Same
+reasoning as the deferrals in Phases 0, 3, 4 and 8.
 
 | Category | Work |
 | --- | --- |
-| Controllers | `Api/V1/Restaurant/DocumentController` — `save`, `show(slot)` (port) |
-| Services | `Restaurant/RestaurantDocumentService` (port) |
-| Repositories | `RestaurantRepository` (partial, completed in Phase 11) |
-| Models | ✅ `users.doc_image1` / `doc_image2` already migrated |
-| FormRequests | `Restaurant/SaveDocumentRequest` (port) |
-| Resources | `RestaurantDocumentResource` |
-| Policies | `RestaurantDocumentPolicy` — owner and admin only. These are **private** documents and must not sit on a public disk — store them through `MediaPlacement::Personal` and stream them from Phase 5's `MediaController`. Note its existing `show()` serves the caller's own avatar and takes no id; the admin read path takes one, so it needs a sibling action **and** the Policy that comes with an id in the URL. |
-| Routes | `v1/restaurant/documents*` (`role:restaurant`), `v1/admin/restaurants/{user}/documents/{slot}` (`role:admin`) |
-| Notifications | `RestaurantDocumentUpdatedNotification` → admin (port) |
+| Controllers | ✅ `Api/V1/Restaurant/DocumentController` — `show`, `save`, `download(slot)`; ✅ `Api/V1/Admin/RestaurantDocumentController@show` — kept separate *because* it takes an id |
+| Services | ✅ `RestaurantDocumentService` — flat under `app/Services/`, not `Services/Restaurant/`. Owns `SLOTS`, the one definition of slot → column → label. |
+| Repositories | ⏸ `RestaurantRepository` deferred to Phase 11 — see above. `UserRepository` covers this phase. |
+| Models | ✅ `users.doc_image1` / `doc_image2`, plus `User::DOCUMENT_COLLECTION` |
+| FormRequests | ✅ `Restaurant/SaveDocumentRequest`, built by looping `SLOTS` rather than restating two blocks |
+| Resources | ✅ `RestaurantDocumentResource` — exposes only the paperwork, never a filename |
+| Policies | ✅ `UserPolicy@viewDocuments` — **the second Policy, and the first on one of our models**; auto-discovered, no manual registration |
+| Routes | ✅ `v1/restaurant/documents*` (`role:restaurant`), `v1/admin/restaurants/{restaurant}/documents/{slot}` (`role:admin`) |
+| Notifications | ✅ `RestaurantDocumentUpdatedNotification` → every admin, flat, on `Concerns/FormatsUserDetails` and shaped like `RiderVehicleUpdatedNotification` |
 | Events | — |
-| Feature Tests | `tests/Feature/Restaurant/DocumentTest.php` — port `RestaurantDocumentTest`, add 403 for another restaurant and 401 unauthenticated |
-| Documentation | New `docs/features/restaurant-documents.md` |
+| Feature Tests | ✅ `tests/Feature/Restaurant/DocumentTest.php` (32); `tests/Feature/Media/ImageUploadServiceTest.php` grew from 25 to 33 |
+| Documentation | ✅ [features/restaurant-documents.md](features/restaurant-documents.md), listed in `mkdocs.yml` `nav:`; [features/media-uploads.md](features/media-uploads.md) updated for the new placement |
+
+**The media foundation grew for the first time since Phase 4**, and CLAUDE.md's rule for that was
+followed — `MediaPlacement`, `ImageUploadService`, the docs and the tests changed in one commit:
+
+- **`MediaPlacement::Document`** — private disk, ceilings of 300/800/1600. Separate from `Personal`
+  because an admin has to *read* a licence number off a scan, not glance at an avatar.
+- **Pass-through formats.** MealHub's document service accepted PDFs, and a business licence
+  commonly is one. Rather than drop the format (the tidier code and the worse product), a PDF is
+  stored once as uploaded and `MediaPlacement::variantFor()` resolves every read of it back to that
+  file. Keyed on the stored extension, not the placement — a document collection legitimately holds
+  a mix. This is the enum case the CLAUDE.md rule "a new storage behavior is a new enum case, not a
+  new service" anticipates.
+- **`Concerns/ValidatesUploadedDocument`** — jpg/jpeg/png/webp/**pdf**, ≤4 MB. A deliberate second
+  trait, not a rule restated in a Form Request: a document is a different class of file with
+  different answers, and one trait per class keeps "raise the ceiling" a single edit.
+
+**Three more decisions worth keeping:**
+
+- **`role:admin` is not the whole authorization question.** The middleware proves the caller is an
+  admin; it says nothing about the bound id, and all four roles share the `users` table — so
+  `doc_image1` exists on a customer's row and the slot map would resolve it. The Policy refuses any
+  id that does not name a restaurant.
+- **The Policy has no owner branch.** The restaurant's own read is a separate, self-scoped route
+  that takes no id, so an owner clause here would be a permission no route can exercise.
+- **Nothing that leaves the server carries a filename.** The Resource emits an endpoint address, and
+  the admin email and stored payload name the *kind* of file (`PDF document` / `Image`) — never a
+  path, and never an attachment.
 
 ---
 

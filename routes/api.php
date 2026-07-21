@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\V1\Admin\NewsletterController as AdminNewsletterController;
+use App\Http\Controllers\Api\V1\Admin\RestaurantDocumentController as AdminRestaurantDocumentController;
 use App\Http\Controllers\Api\V1\Auth\AdminAuthController;
 use App\Http\Controllers\Api\V1\Auth\CustomerAuthController;
 use App\Http\Controllers\Api\V1\Auth\RestaurantAuthController;
@@ -11,6 +12,7 @@ use App\Http\Controllers\Api\V1\MediaController;
 use App\Http\Controllers\Api\V1\NewsletterController;
 use App\Http\Controllers\Api\V1\NotificationController;
 use App\Http\Controllers\Api\V1\ProfileController;
+use App\Http\Controllers\Api\V1\Restaurant\DocumentController as RestaurantDocumentController;
 use App\Http\Controllers\Api\V1\Rider\VehicleController;
 use Illuminate\Support\Facades\Route;
 
@@ -187,6 +189,49 @@ Route::prefix('v1')->name('api.v1.')->group(function () use ($registerAuthRoutes
             Route::post('/', 'save')->name('save');
             Route::get('image', 'image')->name('image');
         });
+
+    /*
+    |----------------------------------------------------------------------
+    | Restaurant documents (restaurant only)
+    |----------------------------------------------------------------------
+    |
+    | The identity paperwork an admin verifies before activating a restaurant.
+    | Self-scoped like the rider's vehicle: every action works on the token's
+    | user and none takes an id, so none needs a Policy. The admin read of a
+    | named restaurant's documents is the route below, and does.
+    |
+    | `save` is POST for create and correction alike — it is an upsert of two
+    | columns, and PHP populates no uploaded-file bag on a PUT body. The
+    | download path is declared with whereNumber so a slot can never be read
+    | as anything else.
+    |
+    */
+    Route::middleware(['auth:sanctum', 'role:restaurant'])
+        ->controller(RestaurantDocumentController::class)
+        ->prefix('restaurant/documents')
+        ->name('restaurant.documents.')
+        ->group(function () {
+            Route::get('/', 'show')->name('show');
+            Route::post('/', 'save')->name('save');
+            Route::get('{slot}', 'download')->whereNumber('slot')->name('download');
+        });
+
+    /*
+    |----------------------------------------------------------------------
+    | Restaurant documents, admin read
+    |----------------------------------------------------------------------
+    |
+    | The first route in the codebase that names *another user*. `role:admin`
+    | proves the caller is an admin; it does not prove `{restaurant}` names a
+    | restaurant, so `UserPolicy::viewDocuments()` decides — an id pointing at
+    | a customer or a rider is refused there rather than streaming a file the
+    | slot map would happily resolve.
+    |
+    */
+    Route::middleware(['auth:sanctum', 'role:admin'])
+        ->get('admin/restaurants/{restaurant}/documents/{slot}', [AdminRestaurantDocumentController::class, 'show'])
+        ->whereNumber('slot')
+        ->name('admin.restaurants.documents.show');
 
     /*
     |----------------------------------------------------------------------

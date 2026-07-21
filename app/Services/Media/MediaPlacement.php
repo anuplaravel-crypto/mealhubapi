@@ -3,6 +3,7 @@
 namespace App\Services\Media;
 
 use App\Http\Resources\Concerns\ResolvesImageUrl;
+use Illuminate\Support\Str;
 
 /**
  * Where a stored image lives, and therefore who may read it.
@@ -30,11 +31,21 @@ enum MediaPlacement: string
     case Cms = 'cms';
 
     /**
-     * Personal data — profile pictures and restaurant documents. Lives on the
+     * Personal data — profile pictures and rider vehicle photos. Lives on the
      * private disk and is only ever served through an authenticated controller,
      * so a stored path is not fetchable by URL alone.
      */
     case Personal = 'personal';
+
+    /**
+     * Identity paperwork — a restaurant's business licence and photo ID.
+     *
+     * Private like {@see self::Personal}, and separate from it for two reasons:
+     * a document is read, not glanced at, so its ceilings are higher than an
+     * avatar's; and it is the one placement that accepts a file this service
+     * cannot rasterise, which {@see self::PASSTHROUGH_EXTENSIONS} handles.
+     */
+    case Document = 'document';
 
     /**
      * The untouched upload, kept alongside the variants so larger sizes can be
@@ -44,11 +55,24 @@ enum MediaPlacement: string
 
     public const DEFAULT_VARIANT = 'medium';
 
+    /**
+     * Extensions stored exactly as uploaded, with no scaled variants.
+     *
+     * A PDF cannot be scaled by an image encoder, and a licence is commonly
+     * filed as one. Rejecting the format would have been the tidier code and
+     * the worse product; storing it under {@see self::ORIGINAL_VARIANT} and
+     * resolving every read of it back to that directory is the whole
+     * accommodation.
+     *
+     * @var list<string>
+     */
+    public const PASSTHROUGH_EXTENSIONS = ['pdf'];
+
     public function disk(): string
     {
         return match ($this) {
             self::Cms => 'public',
-            self::Personal => 'local',
+            self::Personal, self::Document => 'local',
         };
     }
 
@@ -60,8 +84,10 @@ enum MediaPlacement: string
     /**
      * Longest edge, in pixels, for each generated variant.
      *
-     * CMS images are display assets on a wide page; personal images are
-     * avatars and document scans, so their ceilings are lower.
+     * CMS images are display assets on a wide page; personal images are avatars
+     * shown at thumbnail sizes. Documents sit between them — an admin has to
+     * *read* a licence number off one, so `large` matches the CMS ceiling even
+     * though the file is private.
      *
      * @return array<string, int>
      */
@@ -70,6 +96,7 @@ enum MediaPlacement: string
         return match ($this) {
             self::Cms => ['small' => 400, 'medium' => 800, 'large' => 1600],
             self::Personal => ['small' => 150, 'medium' => 400, 'large' => 800],
+            self::Document => ['small' => 300, 'medium' => 800, 'large' => 1600],
         };
     }
 
@@ -90,11 +117,20 @@ enum MediaPlacement: string
      */
     public function path(string $collection, string $variant, string $filename): string
     {
+        return $this->directory($collection, $variant).'/'.$filename;
+    }
+
+    /**
+     * The directory one variant of a collection is written to — the same path
+     * as {@see self::path()} without the file, for the writer that hands a
+     * destination and a name to the filesystem separately.
+     */
+    public function directory(string $collection, string $variant): string
+    {
         return implode('/', array_filter([
             $this->prefix(),
             trim($collection, '/'),
             $this->resolveVariant($variant),
-            $filename,
         ]));
     }
 
@@ -111,15 +147,52 @@ enum MediaPlacement: string
     }
 
     /**
-     * Path segment separating this placement's files from the other's on a
-     * shared disk. Personal files already namespace themselves by role, so
-     * they need none.
+     * The variant a *particular stored file* lives under.
+     *
+     * Identical to {@see self::resolveVariant()} for anything scalable, but a
+     * pass-through file has only the original — asking it for `small` must
+     * resolve to the one directory it was written to rather than 404 on a path
+     * that could never have existed. Both the writer and the reader ask this,
+     * so neither can invent a directory the other did not use.
+     */
+    public function variantFor(?string $filename, ?string $requested): string
+    {
+        return self::isPassthrough($filename)
+            ? self::ORIGINAL_VARIANT
+            : $this->resolveVariant($requested);
+    }
+
+    /**
+     * Whether a filename names a format stored as uploaded rather than
+     * re-encoded into variants.
+     *
+     * Keyed on the stored extension rather than on the placement: the file
+     * itself is what decides, and a document collection legitimately holds a
+     * mix of scanned images and PDFs.
+     */
+    public static function isPassthrough(?string $filename): bool
+    {
+        if ($filename === null || $filename === '') {
+            return false;
+        }
+
+        return in_array(
+            Str::lower(pathinfo($filename, PATHINFO_EXTENSION)),
+            self::PASSTHROUGH_EXTENSIONS,
+            true,
+        );
+    }
+
+    /**
+     * Path segment separating this placement's files from the others' on a
+     * shared disk. Private files already namespace themselves by role, so they
+     * need none.
      */
     private function prefix(): string
     {
         return match ($this) {
             self::Cms => self::Cms->value,
-            self::Personal => '',
+            self::Personal, self::Document => '',
         };
     }
 }

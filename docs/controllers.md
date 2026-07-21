@@ -507,6 +507,34 @@ Separate from {@see self::update()} so changing a photo does not submit
 
 ---
 
+## Api\V1\Restaurant\DocumentController
+
+**File:** `app/Http/Controllers/Api/V1/Restaurant/DocumentController.php`
+
+### `download(Request $request, int $slot): StreamedResponse`
+
+Stream one of the restaurant's own documents.
+
+
+### `save(SaveDocumentRequest $request): JsonResponse`
+
+File one or both documents.
+
+**Request body**
+
+| Field | Rules |
+|---|---|
+| doc_image1 | `RequiredIf|nullable|file|mimes:jpg,jpeg,png,webp,pdf|max:4096` |
+| doc_image2 | `RequiredIf|nullable|file|mimes:jpg,jpeg,png,webp,pdf|max:4096` |
+
+
+### `show(Request $request): JsonResponse`
+
+What the restaurant has filed so far.
+
+
+---
+
 ## Api\V1\Rider\VehicleController
 
 **File:** `app/Http/Controllers/Api/V1/Rider/VehicleController.php`
@@ -546,6 +574,17 @@ The rider's registered vehicle. A rider who has not submitted one yet
 ### `show(Request $request)`
 
 Return an empty response simply to trigger the storage of the CSRF cookie in the browser.
+
+
+---
+
+## \Api\V1\Admin\RestaurantDocumentController
+
+**File:** `/app/Http/Controllers/Api/V1/Admin/RestaurantDocumentController.php`
+
+### `show(Request $request, User $restaurant, int $slot): StreamedResponse`
+
+Stream one document belonging to the named restaurant.
 
 
 ---

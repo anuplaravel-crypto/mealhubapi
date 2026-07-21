@@ -549,8 +549,6 @@
 **File:** `app/Models/User.php`  
 **Table:** `users`
 
-> Not referenced by any routed controller found — this model has no active read/write path today.
-
 **Columns** (live schema)
 
 | Column | Type | Nullable |
