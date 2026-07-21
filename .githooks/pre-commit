@@ -1,8 +1,15 @@
 #!/bin/sh
 #
-# Reminder hook: warns when code changed but no docs were updated, per
-# CLAUDE.md's "Documentation Per Feature" rule. This never blocks a commit —
+# Reminder hook: warns when code changed but no hand-written docs were updated,
+# per CLAUDE.md's "Documentation Per Feature" rule. This never blocks a commit —
 # it only prints a reminder so docs don't silently drift from the code.
+#
+# Only docs/features/ counts as "docs were updated". The reference docs
+# (architecture/controllers/models/routes/README) are regenerated automatically
+# by `php artisan docs:generate`, so they are almost always dirty after a code
+# change — staging them via `git add -A` is no evidence that anyone wrote down
+# the *why*. Matching them here would silence this reminder in every normal
+# commit.
 #
 # Enabled via a version-controlled hooks path (see .githooks/README.md):
 #     git config core.hooksPath .githooks
@@ -10,17 +17,18 @@
 staged=$(git diff --cached --name-only --diff-filter=ACMR)
 
 code_changed=$(printf '%s\n' "$staged" | grep -E '^(app/|routes/|database/migrations/)' || true)
-docs_changed=$(printf '%s\n' "$staged" | grep -E '^docs/' || true)
+docs_changed=$(printf '%s\n' "$staged" | grep -E '^docs/features/' || true)
 
 if [ -n "$code_changed" ] && [ -z "$docs_changed" ]; then
     printf '\n'
     printf '⚠️  Docs reminder\n'
     printf '   You staged changes under app/, routes/, or database/migrations/,\n'
-    printf '   but no docs/ file is staged.\n'
+    printf '   but no docs/features/ file is staged.\n'
     printf '\n'
-    printf '   If this change adds or alters an endpoint, controller, model, route,\n'
-    printf '   or business rule, update the relevant docs (see docs/) or run\n'
-    printf '   /project-docs, then re-stage them.\n'
+    printf '   If this change adds or alters an endpoint, request/response shape,\n'
+    printf '   or business rule, update the relevant docs/features/<feature>.md or\n'
+    printf '   run /project-docs, then re-stage it. (The reference docs under docs/\n'
+    printf '   regenerate themselves and do not count.)\n'
     printf '\n'
     printf '   This is only a reminder — the commit will proceed.\n'
     printf '\n'
