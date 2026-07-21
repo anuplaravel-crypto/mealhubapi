@@ -381,6 +381,55 @@ Admins register with a reduced field set and are created pre-verified,
 
 ---
 
+## Api\V1\MediaController
+
+**File:** `app/Http/Controllers/Api/V1/MediaController.php`
+
+### `show(Request $request): StreamedResponse`
+
+Stream the authenticated user's own profile picture.
+
+
+---
+
+## Api\V1\ProfileController
+
+**File:** `app/Http/Controllers/Api/V1/ProfileController.php`
+
+### `show(Request $request): JsonResponse`
+
+
+### `update(UpdateProfileRequest $request): JsonResponse`
+
+**Request body**
+
+| Field | Rules |
+|---|---|
+| firstName | `required|string|max:20` |
+| lastName | `nullable|string|max:20` |
+| mobile | `required|string|max:20` |
+| preferred_language | `nullable|string|max:20` |
+| address1 | `nullable|string|max:255` |
+| address2 | `nullable|string|max:255` |
+| zip_code | `nullable|string|max:50` |
+| country_id | `nullable|exists:countries,id` |
+| county_id | `nullable|exists:counties,id` |
+| city_id | `nullable|exists:cities,id` |
+
+
+### `updatePicture(UpdateProfilePictureRequest $request): JsonResponse`
+
+Separate from {@see self::update()} so changing a photo does not submit
+
+**Request body**
+
+| Field | Rules |
+|---|---|
+| image | `required|image|mimes:jpg,jpeg,png,webp|max:2048` |
+
+
+---
+
 ## Laravel\Sanctum\Http\Controllers\CsrfCookieController
 
 **File:** `Laravel/Sanctum/Http/Controllers/CsrfCookieController.php`

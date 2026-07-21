@@ -49,7 +49,6 @@ Every application route is defined in `routes/api.php` and auto-prefixed with `/
 |---|---|---|---|---|
 | GET | `/` | — | Closure | web |
 | POST | `/_boost/browser-logs` | boost.browser-logs | Closure | — |
-| GET | `/api/user` | — | Closure | api, auth:sanctum |
 | POST | `/api/v1/change-password` | api.v1.customer.change-password | CustomerAuthController@changePassword | api, auth:sanctum, role:customer |
 | GET | `/api/v1/counties/{county}/cities` | api.v1.counties.cities.index | LocationController@cities | api |
 | GET | `/api/v1/countries` | api.v1.countries.index | LocationController@countries | api |
@@ -58,6 +57,10 @@ Every application route is defined in `routes/api.php` and auto-prefixed with `/
 | GET | `/api/v1/home` | api.v1.home | HomeController@index | api |
 | POST | `/api/v1/login` | api.v1.customer.login | CustomerAuthController@login | api, throttle:6,1 |
 | POST | `/api/v1/logout` | api.v1.customer.logout | CustomerAuthController@logout | api, auth:sanctum, role:customer |
+| GET | `/api/v1/media/profile-picture` | api.v1.media.profile-picture | MediaController@show | api, auth:sanctum |
+| GET | `/api/v1/profile` | api.v1.profile.show | ProfileController@show | api, auth:sanctum |
+| PUT | `/api/v1/profile` | api.v1.profile.update | ProfileController@update | api, auth:sanctum |
+| POST | `/api/v1/profile/picture` | api.v1.profile.picture.update | ProfileController@updatePicture | api, auth:sanctum |
 | POST | `/api/v1/registration` | api.v1.customer.registration | CustomerAuthController@register | api |
 | POST | `/api/v1/resend-otp` | api.v1.customer.resend-otp | CustomerAuthController@resendOtp | api, throttle:6,1 |
 | POST | `/api/v1/reset-password` | api.v1.customer.reset-password | CustomerAuthController@resetPassword | api, throttle:6,1 |

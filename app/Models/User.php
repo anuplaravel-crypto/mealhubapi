@@ -17,6 +17,16 @@ class User extends Authenticatable
     use HasApiTokens, HasFactory, Notifiable;
 
     /**
+     * Storage collection profile pictures are written to.
+     *
+     * Unlike the CMS models' constants this is only the leaf: profile pictures
+     * are personal data, and the four roles share one `users` table, so the
+     * owning role prefixes it — `customer/profile`, `rider/profile`. The
+     * prefixing happens in `ProfileService`, which is the only writer.
+     */
+    public const IMAGE_COLLECTION = 'profile';
+
+    /**
      * The attributes that are mass assignable.
      *
      * @var list<string>

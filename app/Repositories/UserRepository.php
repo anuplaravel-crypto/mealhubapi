@@ -30,6 +30,19 @@ class UserRepository extends BaseRepository
     }
 
     /**
+     * Reload a user with the country/county/city rows their ids point at.
+     *
+     * Eager loading here rather than letting a Resource touch `$user->country`
+     * is what keeps the profile endpoints at a fixed query count — and `load()`
+     * re-queries every call, so a profile update that moved the user to another
+     * city cannot answer with the previous city still attached.
+     */
+    public function withLocation(User $user): User
+    {
+        return $user->load(['country', 'county', 'city']);
+    }
+
+    /**
      * Issue a Sanctum personal access token and return its plaintext value.
      *
      * The plaintext is only ever available here, at issuance — it is never

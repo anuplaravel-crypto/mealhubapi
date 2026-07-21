@@ -68,7 +68,7 @@ it, Phase 10 or 11 would mean "any logged-in customer can edit the home page".
    │
 1. Auth hardening ✅ ┬─→ 2. Geo reference (public) ✅       1b. Mobile OTP (deferred)
                     ├─→ 3. Public Home CMS (public, read-only) ✅
-                    └─→ 4. Media foundation ✅┬─→ 5. Profile
+                    └─→ 4. Media foundation ✅┬─→ 5. Profile ✅
                                               ├─→ 8. Rider vehicle
                                               ├─→ 9. Restaurant documents
                                               └─→ 10. Admin CMS write
@@ -404,21 +404,48 @@ exist in this clone, and without it CMS images are written but every URL 404s.
 
 ---
 
-## Phase 5 — Profile (all four roles)
+## Phase 5 — Profile (all four roles) ✅ Complete
+
+The first phase to store a private file, and therefore the one that finally built Phase 4's
+deferred streaming controller. `php artisan test --compact`: 200 passed.
 
 | Category | Work |
 | --- | --- |
-| Controllers | `Api/V1/ProfileController` — one controller, role read from the token, replacing MealHub's four near-identical `ProfileController`s |
-| Services | `ProfileService`. Compare MealHub's four role-specific profile services first; if real differences exist keep them as private methods, not four classes. |
-| Repositories | `UserRepository` (extend) |
-| Models | ✅ `User` |
-| FormRequests | `Profile/UpdateProfileRequest`, `Profile/UpdateProfilePictureRequest`. Drop MealHub's `UpdateProfileWithPictureRequest` — an API separates the two calls. |
-| Resources | Extend `UserResource`: avatar URL via the Phase 4 trait, nested country/county/city from Phase 2 |
+| Controllers | ✅ `Api/V1/ProfileController` — `show`, `update`, `updatePicture`, role read from the token, replacing MealHub's four near-identical `ProfileController`s. Plus ✅ `Api/V1/MediaController@show` (Phase 4's deferral, closed). |
+| Services | ✅ `ProfileService` — flat under `app/Services/`, matching `AuthService`. MealHub's four role services turned out to be byte-identical apart from the image directory, so there are no private per-role methods either. |
+| Repositories | ✅ `UserRepository::withLocation()` |
+| Models | ✅ `User` — plus `IMAGE_COLLECTION = 'profile'`, the leaf the owning role prefixes |
+| FormRequests | ✅ `Profile/UpdateProfileRequest`, `Profile/UpdateProfilePictureRequest` (on Phase 4's `ValidatesUploadedImage`). `UpdateProfileWithPictureRequest` deliberately not ported. |
+| Resources | ✅ `UserResource` extended — `image_url`, nested `country`/`county`/`city`, and `address2` (previously missing) |
 | Policies | — (self-scoped: always `$request->user()`, never an ID from the request) |
-| Routes | `GET v1/profile`, `PUT v1/profile`, `POST v1/profile/picture` — `auth:sanctum`, not role-gated. **Plus Phase 4's deferred `GET v1/media/...`**: avatars are personal data on the private disk, so this phase is where the authenticated streaming controller is finally needed and must be built. |
+| Routes | ✅ `GET v1/profile`, `PUT v1/profile`, `POST v1/profile/picture`, `GET v1/media/profile-picture` — `auth:sanctum`, not role-gated. The skeleton's `GET api/user` closure was **removed**: it returned a raw model, bypassing both the Resource layer and the envelope. |
 | Notifications / Events | — |
-| Feature Tests | `tests/Feature/Profile/` — update happy path, validation failure, picture upload and replace, 401 unauthenticated, and a test that user A cannot mutate user B |
-| Documentation | New `docs/features/profile.md` |
+| Feature Tests | ✅ `tests/Feature/Profile/ProfileTest.php` (17) and `ProfilePictureTest.php` (18) |
+| Documentation | ✅ [features/profile.md](features/profile.md); [features/media-uploads.md](features/media-uploads.md) updated off "no endpoints yet" |
+
+**Four decisions worth keeping:**
+
+- **`image_url` is an endpoint address, not a storage URL** — and it is null unless the resource
+  *is* the caller, because the streaming route serves nobody else's file. This is the one place
+  `UserResource` cannot use Phase 3's `ResolvesImageUrl` trait: that trait is hard-wired to
+  `MediaPlacement::Cms` because a public URL is the only thing it can build.
+- **The media route takes no id, so it needs no Policy.** The roadmap's Phase 5 line ("self-scoped,
+  never an ID from the request") and its Definition of Done ("a Policy wherever an ID arrives from
+  the URL") only agree if the streaming route stays self-scoped — so it does. Phase 9's
+  `v1/admin/restaurants/{user}/documents/{slot}` is the first route that must bring one, and
+  `app/Policies/` still does not exist.
+- **Location ids are checked for existence, not for consistency**, matching `RegisterRequest`: a
+  `city_id` from a different county is accepted. Tightening that is a change to both requests, not
+  to this endpoint alone, so it was left as known debt rather than a silent divergence.
+- **`whenLoaded(..., null)` rather than a missing key.** `country`/`county`/`city` are always
+  present, null where they were not eager-loaded — an absent key and a null are the same in PHP but
+  not in a typed client. Resolving them inside the Resource instead would be three queries per user
+  on every list that later reuses it.
+
+**A third instance of the sanctum memoization gotcha:** the "user A cannot read user B's picture"
+test cannot upload as A and then fetch as B — the guard would answer both as A, and the test passes
+for the wrong reason. It seeds A's file straight onto the fake disk and makes exactly one
+authenticated request.
 
 ---
 
@@ -497,7 +524,7 @@ Introduce a `FRONTEND_URL` env value in this phase.
 | Models | ✅ `users.doc_image1` / `doc_image2` already migrated |
 | FormRequests | `Restaurant/SaveDocumentRequest` (port) |
 | Resources | `RestaurantDocumentResource` |
-| Policies | `RestaurantDocumentPolicy` — owner and admin only. These are **private** documents and must not sit on a public disk — store them through `MediaPlacement::Personal` and serve them through the streaming endpoint Phase 5 builds. |
+| Policies | `RestaurantDocumentPolicy` — owner and admin only. These are **private** documents and must not sit on a public disk — store them through `MediaPlacement::Personal` and stream them from Phase 5's `MediaController`. Note its existing `show()` serves the caller's own avatar and takes no id; the admin read path takes one, so it needs a sibling action **and** the Policy that comes with an id in the URL. |
 | Routes | `v1/restaurant/documents*` (`role:restaurant`), `v1/admin/restaurants/{user}/documents/{slot}` (`role:admin`) |
 | Notifications | `RestaurantDocumentUpdatedNotification` → admin (port) |
 | Events | — |

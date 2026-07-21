@@ -6,12 +6,9 @@ use App\Http\Controllers\Api\V1\Auth\RestaurantAuthController;
 use App\Http\Controllers\Api\V1\Auth\RiderAuthController;
 use App\Http\Controllers\Api\V1\HomeController;
 use App\Http\Controllers\Api\V1\LocationController;
-use Illuminate\Http\Request;
+use App\Http\Controllers\Api\V1\MediaController;
+use App\Http\Controllers\Api\V1\ProfileController;
 use Illuminate\Support\Facades\Route;
-
-Route::get('/user', function (Request $request) {
-    return $request->user();
-})->middleware('auth:sanctum');
 
 /*
 |--------------------------------------------------------------------------
@@ -81,4 +78,24 @@ Route::prefix('v1')->name('api.v1.')->group(function () use ($registerAuthRoutes
     |
     */
     Route::get('home', [HomeController::class, 'index'])->name('home');
+
+    /*
+    |----------------------------------------------------------------------
+    | Own profile (every role)
+    |----------------------------------------------------------------------
+    |
+    | Shared by all four roles and deliberately not role-gated: each of them
+    | is entitled to maintain their own account, and none of these actions
+    | takes an id — the caller is the token's user, so there is no other row
+    | to reach. The picture is its own endpoint so a photo change does not
+    | submit the rest of the form, and its read path streams from the private
+    | disk rather than exposing a URL.
+    |
+    */
+    Route::middleware('auth:sanctum')->group(function () {
+        Route::get('profile', [ProfileController::class, 'show'])->name('profile.show');
+        Route::put('profile', [ProfileController::class, 'update'])->name('profile.update');
+        Route::post('profile/picture', [ProfileController::class, 'updatePicture'])->name('profile.picture.update');
+        Route::get('media/profile-picture', [MediaController::class, 'show'])->name('media.profile-picture');
+    });
 });

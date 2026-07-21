@@ -13,8 +13,8 @@ php artisan docs:generate
 
 - [architecture.md](architecture.md) — module structure, authentication design, user roles, migrations timeline, automated observations
 - [models.md](models.md) — every Eloquent model (16 found): live schema columns, fillable/hidden/casts, relationships
-- [controllers.md](controllers.md) — every routed controller (7 found): method signatures, Form Request validation rules, extracted response examples
-- [routes.md](routes.md) — the full route table (43 routes), grouped by role
+- [controllers.md](controllers.md) — every routed controller (9 found): method signatures, Form Request validation rules, extracted response examples
+- [routes.md](routes.md) — the full route table (46 routes), grouped by role
 
 ## Feature docs (hand-written)
 
@@ -25,4 +25,5 @@ One per domain concern under `docs/features/`. These are **not** auto-generated 
 - [features/home-cms.md](features/home-cms.md)
 - [features/locations.md](features/locations.md)
 - [features/media-uploads.md](features/media-uploads.md)
+- [features/profile.md](features/profile.md)
 
