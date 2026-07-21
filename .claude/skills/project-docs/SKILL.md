@@ -9,23 +9,27 @@ Keeps the **hand-written** part of the `docs/` tree in sync with the code. This 
 
 ## Division of labour — read this first
 
-`docs/` has two kinds of files, maintained two different ways:
+`docs/` has three kinds of files, maintained three different ways:
 
 - **Auto-generated (do NOT hand-edit):** `docs/architecture.md`, `docs/controllers.md`, `docs/models.md`, `docs/routes.md`, and `docs/README.md`. These are produced by `php artisan docs:generate` (an `app/Services/Docs/` extractor + renderer engine), which runs automatically on every file edit via the PostToolUse hook. Each starts with an "Auto-generated … Do not hand-edit" banner. If any of these looks stale, the fix is to run `php artisan docs:generate`, **never** to edit the `.md` by hand (the next generate would overwrite you). If the *content* is wrong, fix the extractor/renderer in `app/Services/Docs/`, not the output.
 
 - **Hand-written (this skill's job):** `docs/features/<feature>.md`. These carry the intent, business rules, and edge cases that can't be introspected from routes/controllers/models. The generator never writes these.
 
+- **Hand-written planning doc (NOT this skill's job):** `docs/roadmap.md` — the MealHub → MealHubApi migration plan: phase order, per-domain file checklists, and the Definition of Done. Treat it as **reference material only**: read it to learn what is planned versus shipped, and **never modify it**. It is maintained by hand, outside this skill.
+
 So this skill maintains **only `docs/features/*.md`**.
 
 ## How to run a sweep
 
-1. Enumerate features by reading `app/Http/Controllers/Api/**`, `php artisan route:list --path=api`, and the `app/Services/**` each controller delegates to. Group routes/controllers/services that belong to the same domain concern into one feature (e.g. all meal-plan endpoints → one `meal-plans` feature, not one doc per route).
+Before documenting any feature, read [docs/roadmap.md](../../../docs/roadmap.md) (what is planned versus already ported), CLAUDE.md (the current architecture and its stated gaps), and the existing `docs/features/<feature>.md` if there is one. Document **only what is actually implemented in the code** — a phase described in the roadmap is a plan, never evidence that a feature exists.
+
+1. Enumerate features by reading `app/Http/Controllers/Api/**`, `php artisan route:list --path=api`, the `app/Services/**` each controller delegates to, and `app/Repositories/**` where a service delegates its queries. Don't assume every feature uses a repository — the tier is being introduced gradually, and where a service still queries Eloquent directly, document the implementation **as it currently is**. Group routes/controllers/services that belong to the same domain concern into one feature (e.g. all meal-plan endpoints → one `meal-plans` feature, not one doc per route).
 2. Derive each feature's canonical doc name in kebab-case (e.g. `meal-plans.md`) from its domain, matching the naming already used for any existing docs.
 3. For each feature, check `docs/features/<name>.md`:
    - **Missing** → create it using the template below, populated only from what's actually implemented (routes, the Form Request(s), the Resource(s), the service, and any validation/authorization rules found in the code).
    - **Present** → re-read it, compare its claims (endpoints, request/response shape, business rules) against the current code, and update only what's stale. Leave still-accurate sections untouched — don't rewrite the whole file.
 4. After adding or removing a feature doc, run `php artisan docs:generate` so the auto-generated `README.md` re-lists the current `docs/features/*.md` set. Don't hand-edit `README.md`.
-5. Report back concisely: which feature docs were created, which were updated (and why), which needed no change.
+5. Report back concisely: which feature docs were created, which were updated (and why), which needed no change. If a doc was **created**, remind the developer to add it to `mkdocs.yml`'s `nav:` by hand — that nav is explicit, so a page missing from it is invisible on the rendered site. Don't edit `mkdocs.yml` yourself.
 
 ## Feature doc template
 
@@ -33,6 +37,8 @@ So this skill maintains **only `docs/features/*.md`**.
 # <Feature Name>
 
 <One or two sentences: what it does and why it exists.>
+
+**Status:** ✅ Implemented — or 🚧 Partial, naming what is missing.
 
 ## Endpoints
 
@@ -44,16 +50,24 @@ So this skill maintains **only `docs/features/*.md`**.
 
 - Validated by: `App\Http\Requests\...`
 - Shaped by: `App\Http\Resources\...`
+- Business logic: `App\Services\...`
+- Data access: `App\Repositories\...` — omit this line entirely when the service still queries Eloquent directly
 - <brief notes on shape/fields that matter — not a field-by-field restatement of the Form Request/Resource source>
 
 ## Business Rules & Edge Cases
 
 - ...
+
+## Tests
+
+`tests/Feature/...` — happy path, validation failure, authentication failure, authorization failure (if applicable), not found (if applicable).
 ```
 
 ## Guardrails
 
-- Never invent endpoints, fields, or rules that aren't in the actual code — read the controller, service, Form Request, and Resource before writing any claim.
+- Never invent endpoints, fields, or rules that aren't in the actual code — read the controller, service, repository (where one exists), Form Request, and Resource before writing any claim.
+- Never document a planned roadmap phase as a shipped feature. `docs/roadmap.md` describes intent; only the code proves implementation. Mark anything half-built as 🚧 Partial rather than describing the finished design.
+- Never modify `docs/roadmap.md` — it is reference material for this skill, maintained by hand elsewhere.
 - Keep each feature doc short: describe behavior and the "why", don't restate the source line-by-line. The mechanical facts (routes, columns, signatures) already live in the auto-generated reference docs — link to them instead of duplicating.
 - Do NOT hand-edit `architecture.md`, `controllers.md`, `models.md`, `routes.md`, or `README.md` — run `php artisan docs:generate`, or fix `app/Services/Docs/` if the generated content is wrong.
 - Don't touch CLAUDE.md or its `<laravel-boost-guidelines>` block — use `/update-claude-md` for CLAUDE.md.
