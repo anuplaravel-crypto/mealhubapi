@@ -52,14 +52,34 @@ The `users.role` column (`enum('admin','restaurant','customer','rider')`) discri
 - `2026_07_12_145548_create_term_conditions_table`
 - `2026_07_12_145550_create_term_condition_users_table`
 - `2026_07_12_145552_create_notifications_table`
+- `2026_07_21_100000_create_rider_vehicles_table`
+- `2026_07_21_100100_create_site_settings_table`
+- `2026_07_21_100200_create_testimonials_table`
+- `2026_07_21_100300_create_home_stats_table`
+- `2026_07_21_100400_create_nav_menus_table`
+- `2026_07_21_100500_create_home_sections_table`
+- `2026_07_21_100600_create_section_features_table`
+- `2026_07_21_100700_create_meal_categories_table`
+- `2026_07_21_100800_create_featured_restaurants_table`
+- `2026_07_21_100900_create_newsletter_subscribers_table`
 
 ## Observations
 
 - `City` model exists but is not referenced by any routed controller.
 - `Country` model exists but is not referenced by any routed controller.
 - `County` model exists but is not referenced by any routed controller.
+- `FeaturedRestaurant` model exists but is not referenced by any routed controller.
+- `HomeSection` model exists but is not referenced by any routed controller.
+- `HomeStat` model exists but is not referenced by any routed controller.
+- `MealCategory` model exists but is not referenced by any routed controller.
+- `NavMenu` model exists but is not referenced by any routed controller.
+- `NewsletterSubscriber` model exists but is not referenced by any routed controller.
+- `RiderVehicle` model exists but is not referenced by any routed controller.
+- `SectionFeature` model exists but is not referenced by any routed controller.
+- `SiteSetting` model exists but is not referenced by any routed controller.
 - `TermCondition` model exists but is not referenced by any routed controller.
 - `TermConditionUser` model exists but is not referenced by any routed controller.
+- `Testimonial` model exists but is not referenced by any routed controller.
 - `User` model exists but is not referenced by any routed controller.
 - Composer package `laravel/tinker` is installed but no matching reference was found under `app/` (best-effort keyword scan — may miss indirect usage).
 

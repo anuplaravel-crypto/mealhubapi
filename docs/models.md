@@ -102,6 +102,341 @@
 
 ---
 
+## FeaturedRestaurant
+
+**File:** `app/Models/FeaturedRestaurant.php`  
+**Table:** `featured_restaurants`
+
+> Not referenced by any routed controller found — this model has no active read/write path today.
+
+**Columns** (live schema)
+
+| Column | Type | Nullable |
+|---|---|---|
+| id | bigint(20) unsigned | no |
+| user_id | bigint(20) unsigned | yes |
+| name | varchar(80) | no |
+| image | varchar(255) | yes |
+| image_url | varchar(500) | yes |
+| rating | decimal(2,1) | yes |
+| location | varchar(60) | yes |
+| cuisines | varchar(120) | yes |
+| delivery_time | varchar(40) | yes |
+| tag | varchar(30) | yes |
+| perk_label | varchar(30) | yes |
+| perk_variant | enum('success','warning') | no |
+| is_published | tinyint(1) | no |
+| sort_order | int(10) unsigned | no |
+| created_at | timestamp | yes |
+| updated_at | timestamp | yes |
+
+**Fillable:** `user_id`, `name`, `image`, `image_url`, `rating`, `location`, `cuisines`, `delivery_time`, `tag`, `perk_label`, `perk_variant`, `is_published`, `sort_order`
+
+**Casts**
+
+| Field | Cast |
+|---|---|
+| id | int |
+| rating | decimal:1 |
+| is_published | boolean |
+| sort_order | integer |
+
+**Relationships**
+
+| Method | Type | Related model |
+|---|---|---|
+| restaurant() | BelongsTo | User |
+
+---
+
+## HomeSection
+
+**File:** `app/Models/HomeSection.php`  
+**Table:** `home_sections`
+
+> Not referenced by any routed controller found — this model has no active read/write path today.
+
+**Columns** (live schema)
+
+| Column | Type | Nullable |
+|---|---|---|
+| id | bigint(20) unsigned | no |
+| key | varchar(40) | no |
+| eyebrow | varchar(60) | yes |
+| heading | varchar(160) | no |
+| heading_accent | varchar(120) | yes |
+| body | text | yes |
+| image | varchar(255) | yes |
+| image_url | varchar(500) | yes |
+| extras | longtext | yes |
+| is_published | tinyint(1) | no |
+| created_at | timestamp | yes |
+| updated_at | timestamp | yes |
+
+**Fillable:** `key`, `eyebrow`, `heading`, `heading_accent`, `body`, `image`, `image_url`, `extras`, `is_published`
+
+**Casts**
+
+| Field | Cast |
+|---|---|
+| id | int |
+| extras | array |
+| is_published | boolean |
+
+**Relationships**
+
+| Method | Type | Related model |
+|---|---|---|
+| features() | HasMany | SectionFeature |
+
+---
+
+## HomeStat
+
+**File:** `app/Models/HomeStat.php`  
+**Table:** `home_stats`
+
+> Not referenced by any routed controller found — this model has no active read/write path today.
+
+**Columns** (live schema)
+
+| Column | Type | Nullable |
+|---|---|---|
+| id | bigint(20) unsigned | no |
+| placement | enum('hero','stat_bar') | no |
+| label | varchar(60) | no |
+| value | varchar(20) | no |
+| icon_class | varchar(60) | yes |
+| accent | enum('green','orange') | no |
+| is_published | tinyint(1) | no |
+| sort_order | int(10) unsigned | no |
+| created_at | timestamp | yes |
+| updated_at | timestamp | yes |
+
+**Fillable:** `placement`, `label`, `value`, `icon_class`, `accent`, `is_published`, `sort_order`
+
+**Casts**
+
+| Field | Cast |
+|---|---|
+| id | int |
+| is_published | boolean |
+| sort_order | integer |
+
+---
+
+## MealCategory
+
+**File:** `app/Models/MealCategory.php`  
+**Table:** `meal_categories`
+
+> Not referenced by any routed controller found — this model has no active read/write path today.
+
+**Columns** (live schema)
+
+| Column | Type | Nullable |
+|---|---|---|
+| id | bigint(20) unsigned | no |
+| name | varchar(60) | no |
+| tagline | varchar(60) | yes |
+| image | varchar(255) | yes |
+| image_url | varchar(500) | yes |
+| is_published | tinyint(1) | no |
+| sort_order | int(10) unsigned | no |
+| created_at | timestamp | yes |
+| updated_at | timestamp | yes |
+
+**Fillable:** `name`, `tagline`, `image`, `image_url`, `is_published`, `sort_order`
+
+**Casts**
+
+| Field | Cast |
+|---|---|
+| id | int |
+| is_published | boolean |
+| sort_order | integer |
+
+---
+
+## NavMenu
+
+**File:** `app/Models/NavMenu.php`  
+**Table:** `nav_menus`
+
+> Not referenced by any routed controller found — this model has no active read/write path today.
+
+**Columns** (live schema)
+
+| Column | Type | Nullable |
+|---|---|---|
+| id | bigint(20) unsigned | no |
+| location | enum('navbar','footer_menu','social','legal') | no |
+| group_label | varchar(40) | yes |
+| label | varchar(60) | no |
+| icon_class | varchar(60) | yes |
+| variant | varchar(20) | yes |
+| url | varchar(255) | yes |
+| route_key | varchar(100) | yes |
+| is_published | tinyint(1) | no |
+| sort_order | int(10) unsigned | no |
+| created_at | timestamp | yes |
+| updated_at | timestamp | yes |
+
+**Fillable:** `location`, `group_label`, `label`, `icon_class`, `variant`, `url`, `route_key`, `is_published`, `sort_order`
+
+**Casts**
+
+| Field | Cast |
+|---|---|
+| id | int |
+| is_published | boolean |
+| sort_order | integer |
+
+---
+
+## NewsletterSubscriber
+
+**File:** `app/Models/NewsletterSubscriber.php`  
+**Table:** `newsletter_subscribers`
+
+> Not referenced by any routed controller found — this model has no active read/write path today.
+
+**Columns** (live schema)
+
+| Column | Type | Nullable |
+|---|---|---|
+| id | bigint(20) unsigned | no |
+| email | varchar(191) | no |
+| token | varchar(64) | no |
+| confirmed_at | timestamp | yes |
+| unsubscribed_at | timestamp | yes |
+| created_at | timestamp | yes |
+| updated_at | timestamp | yes |
+
+**Fillable:** `email`, `token`, `confirmed_at`, `unsubscribed_at`
+
+**Casts**
+
+| Field | Cast |
+|---|---|
+| id | int |
+| confirmed_at | datetime |
+| unsubscribed_at | datetime |
+
+---
+
+## RiderVehicle
+
+**File:** `app/Models/RiderVehicle.php`  
+**Table:** `rider_vehicles`
+
+> Not referenced by any routed controller found — this model has no active read/write path today.
+
+**Columns** (live schema)
+
+| Column | Type | Nullable |
+|---|---|---|
+| id | bigint(20) unsigned | no |
+| rider_id | bigint(20) unsigned | no |
+| image | varchar(255) | yes |
+| vehicle_type | enum('bike','car','scooter','bicycle') | no |
+| registration_number | varchar(50) | yes |
+| vehicle_color | varchar(30) | yes |
+| vehicle_brand | varchar(50) | yes |
+| vehicle_model | varchar(50) | yes |
+| is_active | tinyint(1) | no |
+| created_at | timestamp | yes |
+| updated_at | timestamp | yes |
+
+**Fillable:** `rider_id`, `image`, `vehicle_type`, `registration_number`, `vehicle_color`, `vehicle_brand`, `vehicle_model`, `is_active`
+
+**Casts**
+
+| Field | Cast |
+|---|---|
+| id | int |
+| is_active | boolean |
+
+**Relationships**
+
+| Method | Type | Related model |
+|---|---|---|
+| rider() | BelongsTo | User |
+
+---
+
+## SectionFeature
+
+**File:** `app/Models/SectionFeature.php`  
+**Table:** `section_features`
+
+> Not referenced by any routed controller found — this model has no active read/write path today.
+
+**Columns** (live schema)
+
+| Column | Type | Nullable |
+|---|---|---|
+| id | bigint(20) unsigned | no |
+| home_section_id | bigint(20) unsigned | no |
+| title | varchar(120) | no |
+| body | text | yes |
+| icon_class | varchar(60) | yes |
+| accent | enum('green','orange') | no |
+| is_published | tinyint(1) | no |
+| sort_order | int(10) unsigned | no |
+| created_at | timestamp | yes |
+| updated_at | timestamp | yes |
+
+**Fillable:** `home_section_id`, `title`, `body`, `icon_class`, `accent`, `is_published`, `sort_order`
+
+**Casts**
+
+| Field | Cast |
+|---|---|
+| id | int |
+| is_published | boolean |
+| sort_order | integer |
+
+**Relationships**
+
+| Method | Type | Related model |
+|---|---|---|
+| section() | BelongsTo | HomeSection |
+
+---
+
+## SiteSetting
+
+**File:** `app/Models/SiteSetting.php`  
+**Table:** `site_settings`
+
+> Not referenced by any routed controller found — this model has no active read/write path today.
+
+**Columns** (live schema)
+
+| Column | Type | Nullable |
+|---|---|---|
+| id | bigint(20) unsigned | no |
+| site_name | varchar(100) | no |
+| brand_primary_text | varchar(60) | no |
+| brand_accent_text | varchar(60) | yes |
+| meta_title | varchar(160) | yes |
+| meta_description | varchar(320) | yes |
+| logo | varchar(255) | yes |
+| footer_blurb | text | yes |
+| created_at | timestamp | yes |
+| updated_at | timestamp | yes |
+
+**Fillable:** `site_name`, `brand_primary_text`, `brand_accent_text`, `meta_title`, `meta_description`, `logo`, `footer_blurb`
+
+**Casts**
+
+| Field | Cast |
+|---|---|
+| id | int |
+
+---
+
 ## TermCondition
 
 **File:** `app/Models/TermCondition.php`  
@@ -179,6 +514,42 @@
 
 ---
 
+## Testimonial
+
+**File:** `app/Models/Testimonial.php`  
+**Table:** `testimonials`
+
+> Not referenced by any routed controller found — this model has no active read/write path today.
+
+**Columns** (live schema)
+
+| Column | Type | Nullable |
+|---|---|---|
+| id | bigint(20) unsigned | no |
+| quote | text | no |
+| author_name | varchar(100) | no |
+| author_role | varchar(100) | yes |
+| avatar | varchar(255) | yes |
+| avatar_url | varchar(500) | yes |
+| rating | decimal(2,1) | no |
+| is_published | tinyint(1) | no |
+| sort_order | int(10) unsigned | no |
+| created_at | timestamp | yes |
+| updated_at | timestamp | yes |
+
+**Fillable:** `quote`, `author_name`, `author_role`, `avatar`, `avatar_url`, `rating`, `is_published`, `sort_order`
+
+**Casts**
+
+| Field | Cast |
+|---|---|
+| id | int |
+| rating | decimal:1 |
+| is_published | boolean |
+| sort_order | integer |
+
+---
+
 ## User
 
 **File:** `app/Models/User.php`  
@@ -241,6 +612,7 @@
 
 | Method | Type | Related model |
 |---|---|---|
+| vehicles() | HasMany | RiderVehicle |
 | country() | BelongsTo | Country |
 | county() | BelongsTo | County |
 | city() | BelongsTo | City |

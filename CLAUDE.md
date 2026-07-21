@@ -206,7 +206,7 @@ Controllers must only: validate (via a Form Request), delegate to a service, and
 The **authentication module is the established reference implementation** of this pattern — follow its structure for new domains (see `app/Http/Controllers/Api/V1/Auth/`, `app/Services/AuthService.php`, and [docs/controllers.md](docs/controllers.md)).
 
 - `app/Http/Controllers/Api/{Version}/` — versioned API controllers. **Versioning has started at `V1`**; put new versioned controllers under `app/Http/Controllers/Api/V1/`, grouped in a sub-namespace by domain when a domain has several (e.g. `Api/V1/Auth/`). Share behavior across related controllers via an abstract base controller rather than copy-paste (see `Auth/BaseAuthController`).
-- `app/Services/` — business logic lives here, injected via constructor property promotion. `AuthService` is the current example. One service per domain concern.
+- `app/Services/` — business logic lives here, injected via constructor property promotion. `AuthService` is the current domain example; one service per domain concern. (`app/Services/Docs/` is a separate non-domain tooling engine behind `docs:generate` — see "Documentation" — not a template for domain services.)
 - `app/Http/Requests/` — one Form Request per validated action, grouped by domain (e.g. `app/Http/Requests/Auth/`). Controllers must not call `$request->validate()` inline. `authorize()` returns `true` for public/pre-auth endpoints.
 - `app/Http/Resources/` — every API response that returns a model or collection goes through an Eloquent API Resource (`UserResource` is the current example). Controllers must not return raw models or arrays built ad hoc.
 - `app/Http/Traits/` — shared HTTP concerns (currently the `ApiResponse` envelope trait; see "Consistent JSON API Responses" below).
@@ -254,6 +254,28 @@ Use standard HTTP status codes (200/201/204, 401/403/404/422, 500) alongside the
 - Never log, echo, or return raw plaintext tokens outside of the initial issuance response.
 
 **Implemented and role-scoped.** The four roles (`customer`, `admin`, `restaurant`, `rider`) share one `users` table and each have their own registration/verify-otp/login/forgot-password/reset-password/logout endpoints under `/api/v1` (customer at the root; admin/restaurant/rider under a path prefix). `AuthService` scopes every lookup by role, so credentials for one role are never valid at another's endpoints. Registration and password reset are **OTP-based** (6-digit code emailed via `OtpNotification`), not link-based. Full behavior lives in [docs/features/authentication.md](docs/features/authentication.md) — reference it rather than restating the rules here.
+
+## Domain Models Beyond Auth (schema only — no API surface yet)
+
+Beyond `User`, the schema carries several domains that have models, migrations, factories, and seed data wired up but **no controllers, services, Form Requests, Resources, or routes yet** — the only live endpoints are auth (see `php artisan route:list --path=api`). When you build their API, follow the auth module's thin-controller/fat-service pattern.
+
+- **Geo reference data** — `Country`, `County`, `City` (nested hierarchy). `User` `belongsTo` each via `country_id` / `county_id` / `city_id`. Seeded by `LocationSeeder` (3 countries / 8 counties / 24 cities).
+- **Terms & conditions** — `TermCondition` (role-scoped, versioned, `is_active`, authored by an admin via `created_by`) and the `TermConditionUser` pivot recording acceptance (`accepted_at`, `ip_address`). `User::acceptedTerms()` / `authoredTerms()` and `TermCondition::scopeActiveForRole()` are the entry points. Registration already captures `accept_registration_tnc` / `marketing_consent` on `User`.
+- **Rider onboarding** — `RiderVehicle` (one per rider, `User::vehicles()`). `is_active` is meant to track the rider's `users.status`, which an admin flips on approval.
+- **Home-page CMS** — `SiteSetting` (singleton), `HomeStat`, `NavMenu`, `HomeSection` + `SectionFeature`, `MealCategory`, `FeaturedRestaurant`, `Testimonial`. All seeded with the content MealHub's public home page ships, so a client rendering from these produces the same site.
+- **Newsletter** — `NewsletterSubscriber` (double opt-in; `status` and `is_mailable` are derived from the two timestamps, never stored).
+
+### Ported from MealHub — decisions that must not be undone
+
+These models came from the sibling [MealHub](../MealHub) Blade app. Three adaptations were deliberate and are easy to "helpfully" revert:
+
+- **`nav_menus.route_key` is not a Laravel route name.** MealHub's column was `route_name` and its model resolved it via `route()`. This API has no named web routes and the SPA owns its routing, so the column holds an opaque token the client maps. Never reintroduce `route()` against it.
+- **No model resolves an image URL.** MealHub's models had `logoUrl` / `avatarSrc` / `imageSrc` accessors returning **root-relative** paths, which a cross-origin SPA cannot use. Models here expose raw `image` / `image_url` (and `logo`, `avatar` / `avatar_url`) columns only; resolving the pair into one absolute URL is the API Resource's job. The `IMAGE_COLLECTION` constants are kept as the storage-layout contract for the upload service that has not landed yet.
+- **No model returns CSS.** `accent`, `variant` and `perk_variant` ship as bare semantic tokens; MealHub's Bootstrap-class helpers (`accentClass`, `linkClass`, `perkClass`, `accentSoft`, `starIcons`) were dropped. Known debt in the other direction: the `icon_class` columns still hold Bootstrap Icons strings inherited from the seed data — treat them as opaque tokens to map, and expect a reseed to bare names ("shop") eventually.
+
+`tests/Feature/Database/SeederIntegrityTest.php` pins the seeded row counts and the rules above (stat-bar values digits-only, the About badge's newline, no source-wrapping in section bodies). `FactoryIntegrityTest.php` exercises every factory state. Note that both run on SQLite, which does **not** enforce varchar lengths — run `migrate:fresh --seed` against MySQL before trusting a new factory.
+
+See [docs/models.md](docs/models.md) (auto-generated) for the full field list.
 
 ## Testing
 

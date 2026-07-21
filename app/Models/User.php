@@ -78,6 +78,16 @@ class User extends Authenticatable
         ];
     }
 
+    /**
+     * Vehicles registered by this rider (rider role only).
+     *
+     * @return HasMany<RiderVehicle, $this>
+     */
+    public function vehicles(): HasMany
+    {
+        return $this->hasMany(RiderVehicle::class, 'rider_id');
+    }
+
     public function country(): BelongsTo
     {
         return $this->belongsTo(Country::class);

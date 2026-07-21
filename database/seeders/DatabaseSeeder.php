@@ -2,10 +2,16 @@
 
 namespace Database\Seeders;
 
-use App\Models\User;
 use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
 
+/**
+ * A manifest, not an implementation — every seeder below owns its own data and
+ * is idempotent (firstOrCreate on a natural key), so this is safe to re-run.
+ *
+ * DevUserSeeder is last and is the only entry that creates accounts; it no-ops
+ * in production.
+ */
 class DatabaseSeeder extends Seeder
 {
     use WithoutModelEvents;
@@ -15,11 +21,16 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
-        // User::factory(10)->create();
-
-        User::factory()->create([
-            'name' => 'Test User',
-            'email' => 'test@example.com',
+        $this->call([
+            LocationSeeder::class,
+            SiteSettingSeeder::class,
+            HomeStatSeeder::class,
+            NavMenuSeeder::class,
+            HomeSectionSeeder::class,
+            MealCategorySeeder::class,
+            FeaturedRestaurantSeeder::class,
+            TestimonialSeeder::class,
+            DevUserSeeder::class,
         ]);
     }
 }
