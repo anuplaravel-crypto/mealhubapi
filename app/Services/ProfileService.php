@@ -30,7 +30,7 @@ class ProfileService
      * `email` is absent because it is the account identifier and the anchor of
      * OTP verification — changing it would need its own re-verification flow.
      * `role`, `status` and `is_email_verified` are administrative: `status` is
-     * the admin-approval gate that Phase 11 flips, and nothing self-served may
+     * the admin-approval gate that `UserManagementService` flips, and nothing self-served may
      * touch it. The Form Request already whitelists the payload; this list is
      * the second lock, so a field added to the request later cannot silently
      * become self-editable.

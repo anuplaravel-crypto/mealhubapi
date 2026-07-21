@@ -16,6 +16,9 @@ Every application route is defined in `routes/api.php` and auto-prefixed with `/
 | POST | `/api/v1/admin/cms/testimonials/{id}` | api.v1.admin.cms.testimonials.update | TestimonialController@update | api, auth:sanctum, role:admin |
 | DELETE | `/api/v1/admin/cms/testimonials/{id}` | api.v1.admin.cms.testimonials.destroy | TestimonialController@destroy | api, auth:sanctum, role:admin |
 | PATCH | `/api/v1/admin/cms/testimonials/{id}/toggle` | api.v1.admin.cms.testimonials.toggle | TestimonialController@toggle | api, auth:sanctum, role:admin |
+| GET | `/api/v1/admin/customers` | api.v1.admin.customers.index | CustomerController@index | api, auth:sanctum, role:admin |
+| GET | `/api/v1/admin/customers/{id}` | api.v1.admin.customers.show | CustomerController@show | api, auth:sanctum, role:admin |
+| PATCH | `/api/v1/admin/customers/{id}/toggle-status` | api.v1.admin.customers.toggle-status | CustomerController@toggleStatus | api, auth:sanctum, role:admin |
 | POST | `/api/v1/admin/forgot-password` | api.v1.admin.forgot-password | AdminAuthController@forgotPassword | api, throttle:6,1 |
 | POST | `/api/v1/admin/login` | api.v1.admin.login | AdminAuthController@login | api, throttle:6,1 |
 | POST | `/api/v1/admin/logout` | api.v1.admin.logout | AdminAuthController@logout | api, auth:sanctum, role:admin |
@@ -24,7 +27,14 @@ Every application route is defined in `routes/api.php` and auto-prefixed with `/
 | POST | `/api/v1/admin/registration` | api.v1.admin.registration | AdminAuthController@register | api |
 | POST | `/api/v1/admin/resend-otp` | api.v1.admin.resend-otp | AdminAuthController@resendOtp | api, throttle:6,1 |
 | POST | `/api/v1/admin/reset-password` | api.v1.admin.reset-password | AdminAuthController@resetPassword | api, throttle:6,1 |
+| GET | `/api/v1/admin/restaurants` | api.v1.admin.restaurants.index | RestaurantController@index | api, auth:sanctum, role:admin |
+| GET | `/api/v1/admin/restaurants/{id}` | api.v1.admin.restaurants.show | RestaurantController@show | api, auth:sanctum, role:admin |
+| PATCH | `/api/v1/admin/restaurants/{id}/toggle-status` | api.v1.admin.restaurants.toggle-status | RestaurantController@toggleStatus | api, auth:sanctum, role:admin |
 | GET | `/api/v1/admin/restaurants/{restaurant}/documents/{slot}` | api.v1.admin.restaurants.documents.show | RestaurantDocumentController@show | api, auth:sanctum, role:admin |
+| GET | `/api/v1/admin/riders` | api.v1.admin.riders.index | RiderController@index | api, auth:sanctum, role:admin |
+| GET | `/api/v1/admin/riders/{id}` | api.v1.admin.riders.show | RiderController@show | api, auth:sanctum, role:admin |
+| PATCH | `/api/v1/admin/riders/{id}/toggle-status` | api.v1.admin.riders.toggle-status | RiderController@toggleStatus | api, auth:sanctum, role:admin |
+| GET | `/api/v1/admin/riders/{rider}/vehicle/image` | api.v1.admin.riders.vehicle.image | RiderVehicleController@image | api, auth:sanctum, role:admin |
 | POST | `/api/v1/admin/verify-otp` | api.v1.admin.verify-otp | AdminAuthController@verifyOtp | api, throttle:6,1 |
 
 ## Restaurant endpoints

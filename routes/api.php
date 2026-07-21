@@ -2,8 +2,12 @@
 
 use App\Http\Controllers\Api\V1\Admin\Cms\SiteSettingController as CmsSiteSettingController;
 use App\Http\Controllers\Api\V1\Admin\Cms\TestimonialController as CmsTestimonialController;
+use App\Http\Controllers\Api\V1\Admin\CustomerController as AdminCustomerController;
 use App\Http\Controllers\Api\V1\Admin\NewsletterController as AdminNewsletterController;
+use App\Http\Controllers\Api\V1\Admin\RestaurantController as AdminRestaurantController;
 use App\Http\Controllers\Api\V1\Admin\RestaurantDocumentController as AdminRestaurantDocumentController;
+use App\Http\Controllers\Api\V1\Admin\RiderController as AdminRiderController;
+use App\Http\Controllers\Api\V1\Admin\RiderVehicleController as AdminRiderVehicleController;
 use App\Http\Controllers\Api\V1\Auth\AdminAuthController;
 use App\Http\Controllers\Api\V1\Auth\CustomerAuthController;
 use App\Http\Controllers\Api\V1\Auth\RestaurantAuthController;
@@ -51,7 +55,33 @@ $registerAuthRoutes = function (string $controller, string $prefix, string $role
         });
 };
 
-Route::prefix('v1')->name('api.v1.')->group(function () use ($registerAuthRoutes) {
+/*
+|--------------------------------------------------------------------------
+| Admin user management (v1)
+|--------------------------------------------------------------------------
+|
+| The same three actions over each of the three managed roles, differing only
+| in the path segment and the controller that fixes the role. Registered from
+| one closure for the same reason the auth routes are: three copies of the
+| block below is three places to forget `whereNumber`.
+|
+| The path segment doubles as the route-name segment — `admin.customers.index`,
+| `admin.riders.toggle-status` — so there is no second string to keep in step
+| with the first.
+|
+*/
+$registerUserManagementRoutes = function (string $controller, string $segment): void {
+    Route::controller($controller)
+        ->prefix($segment)
+        ->name("{$segment}.")
+        ->group(function () {
+            Route::get('/', 'index')->name('index');
+            Route::get('{id}', 'show')->whereNumber('id')->name('show');
+            Route::patch('{id}/toggle-status', 'toggleStatus')->whereNumber('id')->name('toggle-status');
+        });
+};
+
+Route::prefix('v1')->name('api.v1.')->group(function () use ($registerAuthRoutes, $registerUserManagementRoutes) {
     $registerAuthRoutes(CustomerAuthController::class, '', 'customer');
     $registerAuthRoutes(AdminAuthController::class, 'admin', 'admin');
     $registerAuthRoutes(RestaurantAuthController::class, 'restaurant', 'restaurant');
@@ -175,8 +205,8 @@ Route::prefix('v1')->name('api.v1.')->group(function () use ($registerAuthRoutes
     |
     | No id appears in any of the three paths — a rider has exactly one
     | vehicle and reaches it through their own token — so none of them needs a
-    | Policy. The admin read of a *named* rider's vehicle arrives in Phase 11,
-    | and takes an id, and must bring one with it.
+    | Policy. The admin read of a *named* rider's vehicle is registered at the
+    | bottom of this file, takes an id, and carries one.
     |
     | `save` is POST for both create and update: the record is an upsert, and
     | PHP does not populate an uploaded file bag on a PUT body.
@@ -294,5 +324,48 @@ Route::prefix('v1')->name('api.v1.')->group(function () use ($registerAuthRoutes
                     Route::patch('{id}/toggle', 'toggle')->whereNumber('id')->name('toggle');
                     Route::delete('{id}', 'destroy')->whereNumber('id')->name('destroy');
                 });
+        });
+
+    /*
+    |----------------------------------------------------------------------
+    | User administration
+    |----------------------------------------------------------------------
+    |
+    | The admin's view of everybody else's account: one list, one profile
+    | read, and one write — the activation gate. Three identical route sets,
+    | registered from one closure for the same reason the auth routes are,
+    | with the *role* fixed by the controller rather than taken from the
+    | path. Nothing a client sends can widen a customer list into everybody.
+    |
+    | The ids here carry no Policy, and that is the considered call rather
+    | than the newsletter/CMS exception repeated. There is no ownership to
+    | check — an admin does not own a customer — and the two questions that
+    | do matter are answered elsewhere: `role:admin` proves the caller, and
+    | `UserRepository::findByRoleOrFail()` proves the target by scoping the
+    | lookup, so an id naming a rider simply does not exist under
+    | `admin/customers`. A wrong-collection id is a 404, not a 403 — a 403
+    | would confirm the row exists somewhere.
+    |
+    | `toggle-status` is PATCH and sends no target state: a replayed request
+    | cannot reactivate an account an admin had just suspended.
+    |
+    | The last route is the exception that proves the rule. It names another
+    | user *and* streams a private file, so it binds the model and asks
+    | `UserPolicy::viewVehicle()` — the ability Phase 8 deferred because
+    | nothing in that phase took an id. Its sibling for restaurant paperwork
+    | is registered above, under the same reasoning.
+    |
+    */
+    Route::middleware(['auth:sanctum', 'role:admin'])
+        ->prefix('admin')
+        ->name('admin.')
+        ->group(function () use ($registerUserManagementRoutes) {
+            $registerUserManagementRoutes(AdminCustomerController::class, 'customers');
+            $registerUserManagementRoutes(AdminRestaurantController::class, 'restaurants');
+            $registerUserManagementRoutes(AdminRiderController::class, 'riders');
+
+            Route::get('riders/{rider}/vehicle/image', [AdminRiderVehicleController::class, 'image'])
+                ->whereNumber('rider')
+                ->name('riders.vehicle.image');
         });
 });

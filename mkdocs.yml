@@ -66,6 +66,7 @@ nav:
       - Newsletter: features/newsletter.md
       - Rider Onboarding: features/rider-onboarding.md
       - Restaurant Documents: features/restaurant-documents.md
+      - Admin User Management: features/admin-user-management.md
 
   - Testing:
       - Postman Testing: postman-testing.md

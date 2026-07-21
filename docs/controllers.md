@@ -81,6 +81,37 @@ Show or hide a row on the public page.
 
 ---
 
+## Api\V1\Admin\CustomerController
+
+**File:** `app/Http/Controllers/Api/V1/Admin/CustomerController.php`
+
+### `index(ListUsersRequest $request): JsonResponse`
+
+One page of this role's accounts.
+
+**Request body**
+
+| Field | Rules |
+|---|---|
+| search | `sometimes|nullable|string|max:191` |
+| status | `sometimes|nullable|boolean` |
+| sort | `sometimes|nullable|string|In` |
+| direction | `sometimes|nullable|string|In` |
+| per_page | `sometimes|nullable|integer|min:1|max:100` |
+
+
+### `show(int $id): JsonResponse`
+
+A single account of this role, with the material an admin reviews it on.
+
+
+### `toggleStatus(int $id): JsonResponse`
+
+Flip the account's activation gate.
+
+
+---
+
 ## Api\V1\Admin\NewsletterController
 
 **File:** `app/Http/Controllers/Api/V1/Admin/NewsletterController.php`
@@ -93,6 +124,79 @@ Erase a subscriber outright, for an erasure request.
 ### `index(): JsonResponse`
 
 The subscriber list, newest signup first, one page at a time.
+
+
+---
+
+## Api\V1\Admin\RestaurantController
+
+**File:** `app/Http/Controllers/Api/V1/Admin/RestaurantController.php`
+
+### `index(ListUsersRequest $request): JsonResponse`
+
+One page of this role's accounts.
+
+**Request body**
+
+| Field | Rules |
+|---|---|
+| search | `sometimes|nullable|string|max:191` |
+| status | `sometimes|nullable|boolean` |
+| sort | `sometimes|nullable|string|In` |
+| direction | `sometimes|nullable|string|In` |
+| per_page | `sometimes|nullable|integer|min:1|max:100` |
+
+
+### `show(int $id): JsonResponse`
+
+A single account of this role, with the material an admin reviews it on.
+
+
+### `toggleStatus(int $id): JsonResponse`
+
+Flip the account's activation gate.
+
+
+---
+
+## Api\V1\Admin\RiderController
+
+**File:** `app/Http/Controllers/Api/V1/Admin/RiderController.php`
+
+### `index(ListUsersRequest $request): JsonResponse`
+
+One page of this role's accounts.
+
+**Request body**
+
+| Field | Rules |
+|---|---|
+| search | `sometimes|nullable|string|max:191` |
+| status | `sometimes|nullable|boolean` |
+| sort | `sometimes|nullable|string|In` |
+| direction | `sometimes|nullable|string|In` |
+| per_page | `sometimes|nullable|integer|min:1|max:100` |
+
+
+### `show(int $id): JsonResponse`
+
+A single account of this role, with the material an admin reviews it on.
+
+
+### `toggleStatus(int $id): JsonResponse`
+
+Flip the account's activation gate.
+
+
+---
+
+## Api\V1\Admin\RiderVehicleController
+
+**File:** `app/Http/Controllers/Api/V1/Admin/RiderVehicleController.php`
+
+### `image(Request $request, User $rider): StreamedResponse`
+
+Stream the named rider's vehicle photo.
 
 
 ---

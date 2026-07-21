@@ -2,7 +2,7 @@
 
 The two identity documents a restaurant files during onboarding — a business licence and a photo ID — and the admin read that lets those be verified before the account is activated.
 
-**Status:** ✅ Implemented — [roadmap](../roadmap.md) Phase 9. Approving the restaurant off the back of a verified document is Phase 11.
+**Status:** ✅ Implemented — [roadmap](../roadmap.md) Phase 9. Approving the restaurant off the back of a verified document shipped in Phase 11 — see [admin-user-management.md](admin-user-management.md).
 
 ## Endpoints
 

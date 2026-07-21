@@ -16,9 +16,9 @@ use Illuminate\Http\Resources\Json\JsonResource;
  * not used — that trait is hard-wired to `MediaPlacement::Cms` because a public
  * URL is the only thing it can build.
  *
- * `rider_id` is deliberately absent: the only caller is the rider themselves,
- * who is not told their own id twice. Phase 11's admin view of a rider is where
- * the owner becomes worth naming.
+ * `rider_id` is deliberately absent even now that an admin reads this too: it
+ * is nested inside an `AdminUserResource` that already names the rider, so the
+ * key would only repeat its parent's `id`.
  *
  * @mixin RiderVehicle
  */
@@ -49,9 +49,14 @@ class RiderVehicleResource extends JsonResource
     }
 
     /**
-     * Address of the endpoint that streams this vehicle's photo, or null when
-     * there is none — or when the resource belongs to somebody other than the
-     * caller, whose file that endpoint would refuse to serve anyway.
+     * The address the caller should read this photo through: the rider's own
+     * endpoint when the vehicle is theirs, the admin one when they are an admin
+     * reviewing somebody else's — and null when there is no photo, or when the
+     * caller is neither and both endpoints would refuse them anyway.
+     *
+     * The same two-address shape as `RestaurantDocumentResource::slotUrl()`,
+     * and for the same reason: one private file, two authenticated readers,
+     * each with an endpoint that proves its own caller.
      *
      * A null means "render no photo": clients must not emit an empty `src`,
      * which browsers resolve against the current document. Append `?variant=`
@@ -64,8 +69,14 @@ class RiderVehicleResource extends JsonResource
             return null;
         }
 
-        return (string) $request->user()?->getKey() === (string) $this->rider_id
-            ? route('api.v1.rider.vehicle.image')
+        $caller = $request->user();
+
+        if ((string) $caller?->getKey() === (string) $this->rider_id) {
+            return route('api.v1.rider.vehicle.image');
+        }
+
+        return $caller?->role === 'admin'
+            ? route('api.v1.admin.riders.vehicle.image', ['rider' => $this->rider_id])
             : null;
     }
 }

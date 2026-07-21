@@ -24,7 +24,7 @@ use Illuminate\Notifications\Notification;
  * `OtpNotification` sends a code rather than a link. Add the action there, not
  * a placeholder here.
  *
- * Nothing dispatches this directly: Phase 11's admin toggle fires
+ * Nothing dispatches this directly: the admin toggle fires
  * {@see UserStatusChanged} and
  * {@see SendAccountStatusNotification} sends it, so the toggle
  * never has to know that changing a flag also sends mail.

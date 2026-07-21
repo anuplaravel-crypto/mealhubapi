@@ -72,7 +72,7 @@ it, Phase 10 or 11 would mean "any logged-in customer can edit the home page".
                                               ├─→ 8. Rider vehicle ✅
                                               ├─→ 9. Restaurant documents ✅
                                               └─→ 10. Admin CMS write
-                         6. Notifications ✅ ──┴─→ 11. Admin user mgmt ─→ 12. Dashboards
+                         6. Notifications ✅ ──┴─→ 11. Admin user mgmt ✅ ─→ 12. Dashboards
                          7. Newsletter ✅
                         13. Terms & conditions (net-new, backlog)
 ```
@@ -130,7 +130,7 @@ domain — see the table below.
 | `NotificationRepository` | 6 ✅ |
 | `NewsletterSubscriberRepository` | 7 ✅ |
 | `RiderVehicleRepository` | 8 ✅ |
-| `CustomerRepository`, `RestaurantRepository`, `RiderRepository` | 11 |
+| `CustomerRepository`, `RestaurantRepository`, `RiderRepository` | 11 — ❌ **not built.** Three classes querying one table; the queries went on `UserRepository` instead, one repository per *model*. |
 
 ### 0.2 Standard API response format
 
@@ -465,7 +465,7 @@ The first phase where an id arrives from the URL, and therefore the one that fin
 | Policies | ✅ `NotificationPolicy` — owner-only, **the first Policy in the codebase**, registered by hand in `AppServiceProvider` |
 | Routes | ✅ `v1/notifications/*` under `auth:sanctum`, no `role:` gate — same reasoning as the profile routes |
 | Notifications | ✅ `RegistrationNotification` and `AccountStatusNotification`, each one role-parameterized class replacing three. `Concerns/FormatsUserDetails` kept. |
-| Events | ✅ `UserStatusChanged` + `Listeners/SendAccountStatusNotification`, net-new. No producer until Phase 11 — that is the point. |
+| Events | ✅ `UserStatusChanged` + `Listeners/SendAccountStatusNotification`, net-new. No producer until Phase 11 — that is the point; it gained one there, plus a second listener. |
 | Seeders / Factories | ✅ net-new `Database\Factories\DatabaseNotificationFactory` |
 | Feature Tests | ✅ `tests/Feature/Notifications/NotificationTest.php` (29) and `AccountNotificationTest.php` (12); the factory added to `FactoryIntegrityTest` |
 | Documentation | ✅ [features/notifications.md](features/notifications.md). `mkdocs.yml` `nav:` also gained the two Phase 4/5 pages that were never listed. |
@@ -491,9 +491,9 @@ The first phase where an id arrives from the URL, and therefore the one that fin
   clients on a rename. Same family of decision as `route_key` and the dropped CSS helpers.
 - **`AccountStatusNotification` ships with an event seam and no producer.** Phase 11's toggle fires
   `UserStatusChanged`; the notification is a listener's job. MealHub's three management services
-  each called `$user->notify(...)` inline, and Phase 11 has a *second* consequence for the same
-  moment (a deactivated rider's `RiderVehicle.is_active`). That is a second listener, not a second
-  line in the toggle. Unlike the deferrals in Phases 0/3/4 this is not a placeholder — the class and
+  each called `$user->notify(...)` inline, and Phase 11 had a *second* consequence for the same
+  moment (a deactivated rider's `RiderVehicle.is_active`). That became a second listener,
+  `SyncRiderVehicleStatus`, not a second line in the toggle. Unlike the deferrals in Phases 0/3/4 this is not a placeholder — the class and
   the listener are complete and tested by dispatching the event.
 
 **One thing this phase changed outside its own domain:** `AuthService::register()` now notifies
@@ -565,18 +565,18 @@ built it. `php artisan test --compact`: 310 passed.
 a rider has exactly one vehicle and reaches it through their own token, so every lookup is keyed on
 `$request->user()` and the class would have had no route to bind to. The half the roadmap named
 that *does* need it ("admin may read any") is Phase 11's read of a named rider, which takes an id
-and must bring the Policy with it. Same reasoning as Phase 0's dropped `PasswordResetRepository`,
+and brought the Policy with it — as one more ability on `UserPolicy`, not a class of its own. Same reasoning as Phase 0's dropped `PasswordResetRepository`,
 Phase 3's `SectionFeatureRepository` and Phase 4's deferred `MediaController@show`.
 
 | Category | Work |
 | --- | --- |
 | Controllers | ✅ `Api/V1/Rider/VehicleController` — `show`, `save`, plus a net-new `image` streaming action |
 | Services | ✅ `RiderVehicleService` — flat under `app/Services/`, not the `Services/Rider/` sub-namespace above. One class is not a sub-namespace, same call as `NewsletterService`. |
-| Repositories | ✅ `RiderVehicleRepository`, rebased on `BaseRepository<RiderVehicle>` — `forRider()` and `updateOrCreateForRider()`. MealHub's `setActiveForRider()` was **not** ported: its only caller is Phase 11's approval toggle. |
+| Repositories | ✅ `RiderVehicleRepository`, rebased on `BaseRepository<RiderVehicle>` — `forRider()` and `updateOrCreateForRider()`. MealHub's `setActiveForRider()` was **not** ported: its only caller is Phase 11's approval toggle, where it arrived. |
 | Models | ✅ `RiderVehicle` — plus `IMAGE_COLLECTION = 'vehicle'`, the leaf the owning role prefixes |
 | FormRequests | ✅ `Rider/SaveVehicleRequest`, on Phase 4's `ValidatesUploadedImage`. MealHub's `failedValidation()` override was not ported — the handler in `bootstrap/app.php` already shapes 422. |
 | Resources | ✅ `RiderVehicleResource` — see the image note below; `ResolvesImageUrl` does **not** apply |
-| Policies | ⏸ `RiderVehiclePolicy` deferred to Phase 11 — see above |
+| Policies | ⏸ `RiderVehiclePolicy` deferred to Phase 11, where it became `UserPolicy@viewVehicle` — see above |
 | Routes | ✅ `GET`/`POST v1/rider/vehicle` and `GET v1/rider/vehicle/image` under `auth:sanctum` + `role:rider` |
 | Notifications | ✅ `RiderVehicleUpdatedNotification` → every admin, flat under `app/Notifications/` and built on Phase 6's `Concerns/FormatsUserDetails` — the reuse that trait was kept for |
 | Events | — |
@@ -621,18 +621,19 @@ models. `php artisan test --compact`: 350 passed.
 **Deviation: the Policy is `UserPolicy`, not `RestaurantDocumentPolicy`.** Policy discovery maps
 `App\Models\User` to `App\Policies\UserPolicy`; any other name needs `Gate::policy(User::class, …)`
 in `AppServiceProvider`, which would monopolise *every* future ability on `User` for a class named
-after documents. Phase 11's admin user management adds its abilities to the same class instead.
+after documents. Phase 11's admin user management added `viewVehicle()` to the same class, exactly as predicted.
 
 **Deviation: `RestaurantRepository` was not built.** The save path updates the caller's own row
 through `UserRepository`, and the admin read resolves its restaurant by route-model binding — so
-the class would have been empty. It arrives in Phase 11 with the listing queries that need it. Same
-reasoning as the deferrals in Phases 0, 3, 4 and 8.
+the class would have been empty. Phase 11 needed those listing queries and put them on
+`UserRepository` rather than building it — one repository per *model*, so a second class against
+`users` was never the right shape. Same reasoning as the deferrals in Phases 0, 3, 4 and 8.
 
 | Category | Work |
 | --- | --- |
 | Controllers | ✅ `Api/V1/Restaurant/DocumentController` — `show`, `save`, `download(slot)`; ✅ `Api/V1/Admin/RestaurantDocumentController@show` — kept separate *because* it takes an id |
 | Services | ✅ `RestaurantDocumentService` — flat under `app/Services/`, not `Services/Restaurant/`. Owns `SLOTS`, the one definition of slot → column → label. |
-| Repositories | ⏸ `RestaurantRepository` deferred to Phase 11 — see above. `UserRepository` covers this phase. |
+| Repositories | ⏸ `RestaurantRepository` deferred to Phase 11, and then never built — `UserRepository` covers both phases. See above. |
 | Models | ✅ `users.doc_image1` / `doc_image2`, plus `User::DOCUMENT_COLLECTION` |
 | FormRequests | ✅ `Restaurant/SaveDocumentRequest`, built by looping `SLOTS` rather than restating two blocks |
 | Resources | ✅ `RestaurantDocumentResource` — exposes only the paperwork, never a filename |
@@ -695,22 +696,46 @@ batch the remaining six.
 
 ---
 
-## Phase 11 — Admin user management
+## Phase 11 — Admin user management ✅ Complete
+
+The phase that gives Phase 6's `UserStatusChanged` / `AccountStatusNotification` a producer and
+Phase 8's derived `RiderVehicle.is_active` a writer. `php artisan test --compact`: 448 passed.
 
 | Category | Work |
 | --- | --- |
-| Controllers | `Api/V1/Admin/{Customer,Restaurant,Rider}Controller` — `index`, `show`, `toggleStatus` (port) |
-| Services | Port MealHub's three management services; evaluate collapsing them into one `UserManagementService` scoped by role, on the same argument as `AuthService` |
-| Repositories | `CustomerRepository`, `RestaurantRepository`, `RiderRepository` (port) |
+| Controllers | ✅ `Api/V1/Admin/{Customer,Restaurant,Rider}Controller` over a new abstract `BaseUserManagementController` — `index`, `show`, `toggleStatus`. Plus `Api/V1/Admin/RiderVehicleController@image`, the admin read of a *named* rider's photo. |
+| Services | ✅ **One** `UserManagementService` scoped by role, not three. The reference app's three differed only in a role string and one vehicle call — the same collapse `AuthService` and `ProfileService` made. |
+| Repositories | ✅ **None of the three were built.** `CustomerRepository` / `RestaurantRepository` / `RiderRepository` are three classes querying one table with the same four methods; `app/Repositories/` holds one class per *model*, so `paginateByRole()` and `findByRoleOrFail()` went on `UserRepository`. `RiderVehicleRepository::setActiveForRider()` — deferred out of Phase 8 for want of a caller — arrived here. |
 | Models | ✅ `User` |
-| FormRequests | `Admin/ListUsersRequest` (net-new: filter, sort, paginate parameters) |
-| Resources | `AdminUserResource` — genuinely different from `UserResource`: exposes status, documents, vehicle, verification state |
-| Policies | — (`role:admin`) |
-| Routes | `v1/admin/{customers,restaurants,riders}` plus `{user}/toggle-status` |
-| Notifications | `AccountStatusNotification` (consolidated in Phase 6) fires on toggle |
-| Events | `UserStatusChanged` (Phase 6) — toggling a rider's status must also flip `RiderVehicle.is_active` |
-| Feature Tests | Port `AdminCustomerManagementTest` and `AdminRestaurantManagementTest`, add the rider equivalent. Assert the notification dispatch and the rider-vehicle side effect. |
-| Documentation | New `docs/features/admin-user-management.md` |
+| FormRequests | ✅ `Admin/ListUsersRequest` (net-new: `search`, `status`, `sort`, `direction`, `per_page`), one class for all three lists |
+| Resources | ✅ `Admin/AdminUserResource` — drops the private picture entirely for `has_profile_picture`, and nests `RestaurantDocumentResource` / `RiderVehicleResource` role-conditionally |
+| Policies | ✅ `UserPolicy::viewVehicle()` on the one route that streams a file. The nine management routes deliberately carry none — see below. |
+| Routes | ✅ `v1/admin/{customers,restaurants,riders}` × (index, `{id}`, `PATCH {id}/toggle-status`) from one closure, plus `GET v1/admin/riders/{rider}/vehicle/image` |
+| Notifications | ✅ `AccountStatusNotification` fires via the listener, not from the service |
+| Events | ✅ `UserStatusChanged` gains its producer and a second listener, `SyncRiderVehicleStatus` |
+| Feature Tests | ✅ `tests/Feature/Admin/UserManagementTest.php` (49) — one class covering all three roles by data provider, including the query-count assertion and a 403 case per non-admin role on every endpoint |
+| Documentation | ✅ [features/admin-user-management.md](features/admin-user-management.md), listed in `mkdocs.yml` `nav:` |
+
+**Four decisions worth keeping:**
+
+- **The role-scoped lookup is what stands in for a Policy.** The roadmap said `role:admin` sufficed;
+  that is half true. `role:admin` proves the *caller*, and `UserRepository::findByRoleOrFail()`
+  proves the *target* by never finding anything else — so a rider id 404s under `admin/customers`
+  and an admin id resolves nowhere, which is what stops an admin deactivating a colleague or
+  themselves. An ability would only re-read the same column after a wider query. The exception is
+  the vehicle photo: it hands over a private file, so it binds the model and asks the Policy.
+- **`RiderVehiclePolicy` was not built.** Phase 8 deferred it here, and here it turned into one
+  method on `UserPolicy` — exactly the outcome Phase 9 predicted when it refused the name
+  `RestaurantDocumentPolicy`. Discovery maps `App\Models\User` to `App\Policies\UserPolicy`; the
+  bound model on that route is the *rider*, not the vehicle.
+- **No transaction around the toggle, unlike the reference app's rider service.** Two single-row
+  updates in separate listeners need one only if a half-applied result is unrecoverable, and it is
+  not — `RiderVehicleService` re-derives `is_active` on every save, so a stale vehicle self-heals. A
+  transaction would instead have put mail delivery inside it.
+- **The toggle re-reads before answering.** The listeners write through the database, so the
+  relations loaded a moment earlier are stale; without the re-read a deactivated rider's response
+  reported their vehicle as still active. The test asserts it from the response body, not just the
+  row.
 
 ---
 

@@ -11,7 +11,8 @@ use Illuminate\Database\Eloquent\Collection;
  *
  * The linked `restaurant` relation is deliberately not eager-loaded here: the
  * public payload exposes none of it, so loading it would be a query the
- * response never uses. Phase 11's admin list is where that changes.
+ * response never uses. The remaining Phase 10 admin CMS list is where that
+ * changes.
  *
  * @extends BaseRepository<FeaturedRestaurant>
  */

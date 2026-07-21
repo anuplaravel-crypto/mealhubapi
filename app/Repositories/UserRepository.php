@@ -3,7 +3,10 @@
 namespace App\Repositories;
 
 use App\Models\User;
+use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 
 /**
  * @extends BaseRepository<User>
@@ -28,6 +31,92 @@ class UserRepository extends BaseRepository
             ->where('role', $role)
             ->where('email', $email)
             ->first();
+    }
+
+    /**
+     * One page of a single role's accounts, for the admin management lists.
+     *
+     * The role is a *scope*, not a filter the caller may drop: the four roles
+     * share the `users` table, so a listing that did not pin it would hand an
+     * admin browsing customers a page of riders — and, worse, would let the
+     * ids on that page resolve at {@see self::findByRoleOrFail()}.
+     *
+     * `$sort` reaches `orderBy()` as a column name, so it must arrive already
+     * whitelisted; `Admin\ListUsersRequest` is what does that, and this method
+     * must never be called with an unvalidated string. The tie-break on `id`
+     * keeps paging stable when many rows share a sort value.
+     *
+     * @param  array{search?: string|null, status?: bool|null, sort?: string|null, direction?: string|null}  $filters
+     * @return LengthAwarePaginator<int, User>
+     */
+    public function paginateByRole(string $role, array $filters, int $perPage): LengthAwarePaginator
+    {
+        $search = $filters['search'] ?? null;
+        $status = $filters['status'] ?? null;
+
+        return $this->query()
+            ->where('role', $role)
+            ->with($this->managementRelationsFor($role))
+            ->when($status !== null, fn (Builder $query) => $query->where('status', $status))
+            ->when(filled($search), fn (Builder $query) => $query->where(
+                fn (Builder $group) => $group
+                    ->orWhere('firstName', 'like', $this->likePattern($search))
+                    ->orWhere('lastName', 'like', $this->likePattern($search))
+                    ->orWhere('email', 'like', $this->likePattern($search))
+                    ->orWhere('mobile', 'like', $this->likePattern($search))
+            ))
+            ->orderBy($filters['sort'] ?? 'created_at', $filters['direction'] ?? 'desc')
+            ->orderBy('id', 'desc')
+            ->paginate($perPage);
+    }
+
+    /**
+     * A single account, scoped to one role — the lookup every admin endpoint
+     * that takes an id from the URL goes through.
+     *
+     * **This is what stands in for a Policy on those routes.** `role:admin`
+     * proves the caller; pinning the role here proves the *target*, so an id
+     * naming a rider cannot resolve under `admin/customers`, and an id naming
+     * an admin cannot resolve anywhere — a wrong-collection id is a 404 rather
+     * than a row an ability would then have to refuse. A Policy could only
+     * re-check the same column after a wider query had already found the row.
+     *
+     * @throws ModelNotFoundException<User>
+     */
+    public function findByRoleOrFail(int|string $id, string $role): User
+    {
+        return $this->query()
+            ->where('role', $role)
+            ->with($this->managementRelationsFor($role))
+            ->findOrFail($id);
+    }
+
+    /**
+     * What the admin list and profile reads eager-load, per role.
+     *
+     * Every role's row renders its location; only a rider's carries a vehicle.
+     * Deciding it here rather than in the service keeps the query count fixed
+     * without a Resource ever touching a lazy relation — which is the whole
+     * N+1 the admin lists would otherwise have.
+     *
+     * @return list<string>
+     */
+    private function managementRelationsFor(string $role): array
+    {
+        return $role === 'rider'
+            ? ['country', 'county', 'city', 'vehicles']
+            : ['country', 'county', 'city'];
+    }
+
+    /**
+     * Wrap a search term for `LIKE`, escaping the wildcards it may contain.
+     *
+     * Without this a term of `%` matches every row and `_` matches any single
+     * character — a search box that silently behaves as a pattern language.
+     */
+    private function likePattern(string $search): string
+    {
+        return '%'.addcslashes($search, '%_\\').'%';
     }
 
     /**

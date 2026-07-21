@@ -121,7 +121,8 @@ class RiderVehicleService
 
     /**
      * `is_active` tracks the rider's `users.status` and is never the rider's to
-     * set — an admin flips it by approving the account (Phase 11).
+     * set — an admin flips it by approving the account, which reaches the
+     * vehicle rows through `SyncRiderVehicleStatus` rather than through here.
      *
      * Deriving it here rather than leaving the column's `default(true)` to stand
      * fixes a real inconsistency in the reference app: a rider registers with

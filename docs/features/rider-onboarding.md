@@ -2,7 +2,7 @@
 
 The one step rider onboarding asks for beyond the account itself: the vehicle a rider delivers on, submitted for an admin to verify before the account goes live.
 
-**Status:** ✅ Implemented — [roadmap](../roadmap.md) Phase 8. The admin side of it — reading a named rider's vehicle, and approving the rider — is Phase 11.
+**Status:** ✅ Implemented — [roadmap](../roadmap.md) Phase 8. The admin side of it — reading a named rider's vehicle, and approving the rider — shipped in Phase 11; see [admin-user-management.md](admin-user-management.md).
 
 ## Endpoints
 
@@ -14,7 +14,7 @@ The one step rider onboarding asks for beyond the account itself: the vehicle a 
 
 **`role:rider` is a real gate here**, unlike on the profile and notification routes: a vehicle is not something every role has a version of, so the gate names one role rather than listing all four. A token from any other role is a 403, an absent token a 401.
 
-**No route takes an id, so no Policy is needed.** A rider has exactly one vehicle and reaches it through their own token — every lookup is keyed on `$request->user()`, so there is no id from a request that could name another rider's row. Phase 11's admin read of a *named* rider's vehicle does take an id, and must bring a Policy with it.
+**No route takes an id, so no Policy is needed.** A rider has exactly one vehicle and reaches it through their own token — every lookup is keyed on `$request->user()`, so there is no id from a request that could name another rider's row. The admin read of a *named* rider's vehicle — `GET /api/v1/admin/riders/{rider}/vehicle/image` — does take an id, and carries `UserPolicy@viewVehicle`.
 
 ## Request / Response
 
@@ -32,7 +32,7 @@ The one step rider onboarding asks for beyond the account itself: the vehicle a 
 
 ## Business Rules & Edge Cases
 
-- **`is_active` mirrors `users.status` and is never the rider's to set.** The service derives it from the rider's account status on every save, so a rider awaiting approval cannot ship a live-looking vehicle and an edit cannot resurrect the flag on a deactivated account. An `is_active` in the payload is ignored. Only an admin approving the account flips it (Phase 11).
+- **`is_active` mirrors `users.status` and is never the rider's to set.** The service derives it from the rider's account status on every save, so a rider awaiting approval cannot ship a live-looking vehicle and an edit cannot resurrect the flag on a deactivated account. An `is_active` in the payload is ignored. Only an admin approving the account flips it, and that reaches the vehicle rows through `App\Listeners\SyncRiderVehicleStatus` rather than through this service.
 - **Every save notifies every admin**, first submission or edit alike, through `RiderVehicleUpdatedNotification` (mail + database). An edit invalidates the verification the previous details were approved under — a rider could otherwise be approved on one plate and quietly swap in another. The stored payload's `type` is `rider_vehicle_updated` and its `title` carries the verb (`submitted` / `updated`).
 - **A plate belongs to one vehicle in the world.** The table's unique index is `[rider_id, registration_number]`, which only stops one rider holding the same plate twice — something the upsert already makes impossible. `SaveVehicleRequest` covers the half the index does not: a plate registered to *another* rider is a 422 on the field, while resubmitting your own unchanged plate stays a valid edit.
 - **Every text field is required even though the columns are nullable.** A vehicle record exists so an admin can verify it, and one missing its plate or model verifies nothing.

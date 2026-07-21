@@ -82,8 +82,9 @@ class RiderVehicleUpdatedNotification extends Notification
      * The payload stored in the notifications table.
      *
      * The photo is named but not linked: it lives on the private disk, so there
-     * is no URL to put here — an admin read path arrives with Phase 11's view of
-     * a rider, which is where the file becomes reachable.
+     * is no URL to put here. An admin reaches the file through the rider's
+     * profile read, whose `AdminUserResource` emits the authenticated address —
+     * a stored payload is not the place to hand out one.
      *
      * @return array<string, mixed>
      */

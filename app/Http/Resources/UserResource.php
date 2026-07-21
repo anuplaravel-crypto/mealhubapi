@@ -14,8 +14,9 @@ use Illuminate\Http\Resources\Json\JsonResource;
  * - `image_url` is **not** a storage URL the way every CMS resource's is.
  *   Profile pictures are personal data on the private disk, so what ships is
  *   the authenticated streaming endpoint's address — and only when the resource
- *   *is* the caller, since that endpoint can serve nobody else's file. Phase 11
- *   gets its own `AdminUserResource` for the admin's view of other people.
+ *   *is* the caller, since that endpoint can serve nobody else's file. The
+ *   admin's view of other people is `Admin\AdminUserResource`, which drops the
+ *   picture entirely rather than emitting an address nobody could use.
  * - `country` / `county` / `city` are the hydrated rows behind the three ids,
  *   present only where the caller was given them eager-loaded (the profile
  *   endpoints). Everywhere else — registration, login — the key is `null` and

@@ -47,4 +47,20 @@ class RiderVehicleRepository extends BaseRepository
     {
         return $this->query()->updateOrCreate(['rider_id' => $rider->getKey()], $data);
     }
+
+    /**
+     * Point every vehicle the rider owns at their new account status.
+     *
+     * Written as a mass update through the relation rather than a read-modify-
+     * write on {@see self::forRider()} for two reasons: a rider with no vehicle
+     * is a no-op rather than a null check at the call site, and the `latest()`
+     * guard in `forRider()` deliberately ignores extra rows — which would leave
+     * a stale second row claiming to be live for a deactivated account.
+     *
+     * @return int the number of vehicle rows updated
+     */
+    public function setActiveForRider(User $rider, bool $isActive): int
+    {
+        return $rider->vehicles()->update(['is_active' => $isActive]);
+    }
 }

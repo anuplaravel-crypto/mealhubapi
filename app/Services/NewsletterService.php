@@ -29,8 +29,9 @@ class NewsletterService
      *
      * Fixed rather than read from `?per_page=`, the same call as
      * {@see NotificationService}: a client-supplied page size is validated
-     * input, and the admin surface here has no Form Request. Phase 11's
-     * `Admin/ListUsersRequest` is where paging parameters get one.
+     * input, and the admin surface here has no Form Request.
+     * `Admin\ListUsersRequest` is the surface that does have one, and is what a
+     * `?per_page=` here would have to grow.
      */
     private const PER_PAGE = 20;
 

@@ -21,9 +21,9 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
  * gate rather than a list of all four.
  *
  * None of the three actions takes an id. The vehicle served is the token
- * holder's own, which is why this controller needs no Policy; when Phase 11 adds
- * an admin read of a named rider's vehicle, *that* route takes an id and must
- * bring a Policy with it.
+ * holder's own, which is why this controller needs no Policy. The admin read of
+ * a *named* rider's vehicle lives in `Api/V1/Admin/RiderVehicleController`,
+ * takes an id, and carries `UserPolicy::viewVehicle()`.
  *
  * The photo streams from here rather than from `Api/V1/MediaController`, whose
  * `show()` is the profile-picture path. Private reads stay with the domain that
