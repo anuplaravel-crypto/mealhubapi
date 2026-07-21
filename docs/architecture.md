@@ -27,6 +27,7 @@ Protected routes use the `auth:sanctum` middleware; tokens are issued with `crea
 | `guest` | `Illuminate\Auth\Middleware\RedirectIfAuthenticated` |
 | `password.confirm` | `Illuminate\Auth\Middleware\RequirePassword` |
 | `precognitive` | `Illuminate\Foundation\Http\Middleware\HandlePrecognitiveRequests` |
+| `role` | `App\Http\Middleware\EnsureUserHasRole` |
 | `signed` | `Illuminate\Routing\Middleware\ValidateSignature` |
 | `throttle` | `Illuminate\Routing\Middleware\ThrottleRequests` |
 | `verified` | `Illuminate\Auth\Middleware\EnsureEmailIsVerified` |

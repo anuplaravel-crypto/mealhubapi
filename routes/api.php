@@ -22,17 +22,25 @@ Route::get('/user', function (Request $request) {
 | restaurant, and rider are namespaced under their own path prefix.
 |
 */
-$registerAuthRoutes = function (string $controller, string $prefix, string $name): void {
+$registerAuthRoutes = function (string $controller, string $prefix, string $role): void {
     Route::controller($controller)
         ->prefix($prefix)
-        ->name("{$name}.")
-        ->group(function () {
+        ->name("{$role}.")
+        ->group(function () use ($role) {
             Route::post('registration', 'register')->name('registration');
             Route::post('verify-otp', 'verifyOtp')->middleware('throttle:6,1')->name('verify-otp');
+            Route::post('resend-otp', 'resendOtp')->middleware('throttle:6,1')->name('resend-otp');
             Route::post('login', 'login')->middleware('throttle:6,1')->name('login');
             Route::post('forgot-password', 'forgotPassword')->middleware('throttle:6,1')->name('forgot-password');
             Route::post('reset-password', 'resetPassword')->middleware('throttle:6,1')->name('reset-password');
-            Route::post('logout', 'logout')->middleware('auth:sanctum')->name('logout');
+
+            // Authenticated actions carry role: as well as auth:sanctum. The
+            // token proves identity; only the role gate proves the caller
+            // belongs at *this* role's endpoints.
+            Route::middleware(['auth:sanctum', "role:{$role}"])->group(function () {
+                Route::post('change-password', 'changePassword')->name('change-password');
+                Route::post('logout', 'logout')->name('logout');
+            });
         });
 };
 

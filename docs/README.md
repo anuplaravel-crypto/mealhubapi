@@ -14,7 +14,7 @@ php artisan docs:generate
 - [architecture.md](architecture.md) — module structure, authentication design, user roles, migrations timeline, automated observations
 - [models.md](models.md) — every Eloquent model (16 found): live schema columns, fillable/hidden/casts, relationships
 - [controllers.md](controllers.md) — every routed controller (5 found): method signatures, Form Request validation rules, extracted response examples
-- [routes.md](routes.md) — the full route table (31 routes), grouped by role
+- [routes.md](routes.md) — the full route table (39 routes), grouped by role
 
 ## Feature docs (hand-written)
 

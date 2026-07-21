@@ -267,9 +267,16 @@ Three more rules the trait enforces; the full wire contract is [docs/features/ap
 - Protect authenticated routes with the `auth:sanctum` middleware in `routes/api.php`.
 - Never log, echo, or return raw plaintext tokens outside of the initial issuance response.
 
-🔴 **There is no role authorization yet.** `auth:sanctum` proves only *that* a token is valid, not *whose role* it carries — so a customer's token can today call `POST /api/v1/admin/logout` (harmless: it revokes only the caller's own token, but it demonstrates the gap). MealHub enforced roles in `JwtAuthMiddleware`; that mechanism was never ported. **Do not add any admin- or role-scoped endpoint until a `role:` middleware exists** (Phase 1 of [docs/roadmap.md](docs/roadmap.md)) — role-scoping in `AuthService` covers credential lookup only, not request authorization.
+**Role authorization is enforced by the `role:` middleware** (`app/Http/Middleware/EnsureUserHasRole.php`, aliased in `bootstrap/app.php`). `auth:sanctum` proves only *that* a token is valid, not *whose role* it carries, so **every authenticated route must carry both**:
 
-**Implemented and role-scoped.** The four roles (`customer`, `admin`, `restaurant`, `rider`) share one `users` table and each have their own registration/verify-otp/login/forgot-password/reset-password/logout endpoints under `/api/v1` (customer at the root; admin/restaurant/rider under a path prefix). `AuthService` scopes every lookup by role, so credentials for one role are never valid at another's endpoints. Registration and password reset are **OTP-based** (6-digit code emailed via `OtpNotification`), not link-based. Full behavior lives in [docs/features/authentication.md](docs/features/authentication.md) — reference it rather than restating the rules here.
+```php
+Route::middleware(['auth:sanctum', 'role:admin'])->group(...);   // one role
+Route::middleware(['auth:sanctum', 'role:admin,restaurant'])->…; // several
+```
+
+The gate reads `users.role` on every request rather than using Sanctum token abilities — a token minted before a role change would keep a stale ability. A mismatched role is a 403; a missing token stays a 401 (never leak that a route exists for some other role). Role-scoping in `AuthService` is a separate concern: it covers credential *lookup*, not request authorization.
+
+**Implemented and role-scoped.** The four roles (`customer`, `admin`, `restaurant`, `rider`) share one `users` table and each have their own registration/verify-otp/resend-otp/login/forgot-password/reset-password/change-password/logout endpoints under `/api/v1` (customer at the root; admin/restaurant/rider under a path prefix). `AuthService` scopes every lookup by role, so credentials for one role are never valid at another's endpoints. Registration and password reset are **OTP-based** (6-digit code emailed via the role-parameterized `OtpNotification`), not link-based — there is no frontend URL to link to until `FRONTEND_URL` lands in Phase 7. Full behavior lives in [docs/features/authentication.md](docs/features/authentication.md) — reference it rather than restating the rules here.
 
 ## Domain Models Beyond Auth (schema only — no API surface yet)
 

@@ -49,10 +49,23 @@ class UserRepository extends BaseRepository
     }
 
     /**
-     * Revoke every token the user holds — used when a password changes.
+     * Revoke every token the user holds — used when a password is reset by
+     * someone who was locked out, so any session an attacker holds dies too.
      */
     public function revokeAllTokens(User $user): void
     {
         $user->tokens()->delete();
+    }
+
+    /**
+     * Revoke every token except the one authenticating this request — used
+     * when a signed-in user changes their own password, which should sign
+     * out their other devices without signing out the one they are using.
+     */
+    public function revokeOtherTokens(User $user): void
+    {
+        $user->tokens()
+            ->where('id', '!=', $user->currentAccessToken()->getKey())
+            ->delete();
     }
 }

@@ -8,10 +8,12 @@ Every application route is defined in `routes/api.php` and auto-prefixed with `/
 
 | Method | URI | Name | Handler | Middleware |
 |---|---|---|---|---|
+| POST | `/api/v1/admin/change-password` | api.v1.admin.change-password | AdminAuthController@changePassword | api, auth:sanctum, role:admin |
 | POST | `/api/v1/admin/forgot-password` | api.v1.admin.forgot-password | AdminAuthController@forgotPassword | api, throttle:6,1 |
 | POST | `/api/v1/admin/login` | api.v1.admin.login | AdminAuthController@login | api, throttle:6,1 |
-| POST | `/api/v1/admin/logout` | api.v1.admin.logout | AdminAuthController@logout | api, auth:sanctum |
+| POST | `/api/v1/admin/logout` | api.v1.admin.logout | AdminAuthController@logout | api, auth:sanctum, role:admin |
 | POST | `/api/v1/admin/registration` | api.v1.admin.registration | AdminAuthController@register | api |
+| POST | `/api/v1/admin/resend-otp` | api.v1.admin.resend-otp | AdminAuthController@resendOtp | api, throttle:6,1 |
 | POST | `/api/v1/admin/reset-password` | api.v1.admin.reset-password | AdminAuthController@resetPassword | api, throttle:6,1 |
 | POST | `/api/v1/admin/verify-otp` | api.v1.admin.verify-otp | AdminAuthController@verifyOtp | api, throttle:6,1 |
 
@@ -19,10 +21,12 @@ Every application route is defined in `routes/api.php` and auto-prefixed with `/
 
 | Method | URI | Name | Handler | Middleware |
 |---|---|---|---|---|
+| POST | `/api/v1/restaurant/change-password` | api.v1.restaurant.change-password | RestaurantAuthController@changePassword | api, auth:sanctum, role:restaurant |
 | POST | `/api/v1/restaurant/forgot-password` | api.v1.restaurant.forgot-password | RestaurantAuthController@forgotPassword | api, throttle:6,1 |
 | POST | `/api/v1/restaurant/login` | api.v1.restaurant.login | RestaurantAuthController@login | api, throttle:6,1 |
-| POST | `/api/v1/restaurant/logout` | api.v1.restaurant.logout | RestaurantAuthController@logout | api, auth:sanctum |
+| POST | `/api/v1/restaurant/logout` | api.v1.restaurant.logout | RestaurantAuthController@logout | api, auth:sanctum, role:restaurant |
 | POST | `/api/v1/restaurant/registration` | api.v1.restaurant.registration | RestaurantAuthController@register | api |
+| POST | `/api/v1/restaurant/resend-otp` | api.v1.restaurant.resend-otp | RestaurantAuthController@resendOtp | api, throttle:6,1 |
 | POST | `/api/v1/restaurant/reset-password` | api.v1.restaurant.reset-password | RestaurantAuthController@resetPassword | api, throttle:6,1 |
 | POST | `/api/v1/restaurant/verify-otp` | api.v1.restaurant.verify-otp | RestaurantAuthController@verifyOtp | api, throttle:6,1 |
 
@@ -30,10 +34,12 @@ Every application route is defined in `routes/api.php` and auto-prefixed with `/
 
 | Method | URI | Name | Handler | Middleware |
 |---|---|---|---|---|
+| POST | `/api/v1/rider/change-password` | api.v1.rider.change-password | RiderAuthController@changePassword | api, auth:sanctum, role:rider |
 | POST | `/api/v1/rider/forgot-password` | api.v1.rider.forgot-password | RiderAuthController@forgotPassword | api, throttle:6,1 |
 | POST | `/api/v1/rider/login` | api.v1.rider.login | RiderAuthController@login | api, throttle:6,1 |
-| POST | `/api/v1/rider/logout` | api.v1.rider.logout | RiderAuthController@logout | api, auth:sanctum |
+| POST | `/api/v1/rider/logout` | api.v1.rider.logout | RiderAuthController@logout | api, auth:sanctum, role:rider |
 | POST | `/api/v1/rider/registration` | api.v1.rider.registration | RiderAuthController@register | api |
+| POST | `/api/v1/rider/resend-otp` | api.v1.rider.resend-otp | RiderAuthController@resendOtp | api, throttle:6,1 |
 | POST | `/api/v1/rider/reset-password` | api.v1.rider.reset-password | RiderAuthController@resetPassword | api, throttle:6,1 |
 | POST | `/api/v1/rider/verify-otp` | api.v1.rider.verify-otp | RiderAuthController@verifyOtp | api, throttle:6,1 |
 
@@ -44,10 +50,12 @@ Every application route is defined in `routes/api.php` and auto-prefixed with `/
 | GET | `/` | — | Closure | web |
 | POST | `/_boost/browser-logs` | boost.browser-logs | Closure | — |
 | GET | `/api/user` | — | Closure | api, auth:sanctum |
+| POST | `/api/v1/change-password` | api.v1.customer.change-password | CustomerAuthController@changePassword | api, auth:sanctum, role:customer |
 | POST | `/api/v1/forgot-password` | api.v1.customer.forgot-password | CustomerAuthController@forgotPassword | api, throttle:6,1 |
 | POST | `/api/v1/login` | api.v1.customer.login | CustomerAuthController@login | api, throttle:6,1 |
-| POST | `/api/v1/logout` | api.v1.customer.logout | CustomerAuthController@logout | api, auth:sanctum |
+| POST | `/api/v1/logout` | api.v1.customer.logout | CustomerAuthController@logout | api, auth:sanctum, role:customer |
 | POST | `/api/v1/registration` | api.v1.customer.registration | CustomerAuthController@register | api |
+| POST | `/api/v1/resend-otp` | api.v1.customer.resend-otp | CustomerAuthController@resendOtp | api, throttle:6,1 |
 | POST | `/api/v1/reset-password` | api.v1.customer.reset-password | CustomerAuthController@resetPassword | api, throttle:6,1 |
 | POST | `/api/v1/verify-otp` | api.v1.customer.verify-otp | CustomerAuthController@verifyOtp | api, throttle:6,1 |
 | GET | `/sanctum/csrf-cookie` | sanctum.csrf-cookie | CsrfCookieController@show | web |

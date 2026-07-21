@@ -22,7 +22,7 @@ finished**; the work that remains is the HTTP layer.
 | Models | 16 | 16 | ✅ Complete — including the three SPA adaptations recorded in CLAUDE.md |
 | Seeders | 9 | 10 | ✅ Complete (plus `DevUserSeeder`) |
 | Factories | 1 | 11 | ✅ Ahead of MealHub |
-| Auth endpoints | 4 roles | 4 roles | 🟡 ~80% — gaps listed in Phase 1 |
+| Auth endpoints | 4 roles | 4 roles | ✅ Phase 1 complete — mobile OTP deferred to Phase 1b |
 | Everything else | 33 controllers | 6 | ❌ This roadmap |
 
 Consequently almost every phase below has **Migrations / Models / Factories / Seeders = done**.
@@ -50,24 +50,23 @@ a future session will "helpfully" collapse the layer back into services.
 
 Repositories return models and collections — never arrays, never DTOs.
 
-### Role authorization does not exist yet 🔴
+### Role authorization ✅ closed in Phase 1
 
-`BaseAuthController::logout()` calls `$request->user()` behind `auth:sanctum` alone. **A
-customer's token can currently call `/api/v1/admin/logout`.** Harmless today (it revokes only
-the caller's own token), but it proves there is no role gate: MealHub enforced roles in
-`JwtAuthMiddleware`, and that mechanism was never ported.
+`auth:sanctum` proves a token is valid, not whose role it carries — so a customer's token used
+to be accepted at `/api/v1/admin/logout`. `app/Http/Middleware/EnsureUserHasRole.php` (aliased
+`role`) now gates every authenticated route, and `tests/Feature/Auth/RoleGateTest.php` pins it.
 
-The moment Phase 10 or 11 lands, this becomes "any logged-in customer can edit the home page".
-**Phase 1 must close it before any role-scoped endpoint ships.**
+**Every authenticated route from here on must carry `role:` as well as `auth:sanctum`.** Without
+it, Phase 10 or 11 would mean "any logged-in customer can edit the home page".
 
 ---
 
 ## Phase order
 
 ```
-0. Foundations
+0. Foundations ✅
    │
-1. Auth hardening ──┬─→ 2. Geo reference (public)
+1. Auth hardening ✅ ┬─→ 2. Geo reference (public)          1b. Mobile OTP (deferred)
                     ├─→ 3. Public Home CMS (public, read-only)
                     └─→ 4. Media foundation ──┬─→ 5. Profile
                                               ├─→ 8. Rider vehicle
@@ -195,29 +194,74 @@ Two implementation notes for whoever touches the handler next:
 
 ---
 
-## Phase 1 — Auth hardening & role gate
+## Phase 1 — Auth hardening & role gate ✅ Complete
 
 Everything later sits behind this, and it closes the authorization hole.
+`php artisan test --compact`: 100 passed.
+
+**Deviation: mobile-OTP login was deferred to Phase 1b (below), not built.** The rest of the
+phase shipped as planned.
 
 | Category | Work |
 | --- | --- |
-| Controllers | Extend `Api/V1/Auth/BaseAuthController` with `resendOtp()`, `changePassword()`. New `Api/V1/Auth/MobileOtpController` (ports `Frontend\AuthController@sendMobileOtp` / `verifyMobileOtp`). |
-| Services | Extend `AuthService`. Do **not** add per-role services — MealHub's four `Auth/*AuthService` classes are already correctly collapsed into one role-parameterized service. |
-| Repositories | ✅ `UserRepository` (Phase 0) already wired into `AuthService`; extend it for the mobile-OTP lookups |
+| Controllers | ✅ `Api/V1/Auth/BaseAuthController` extended with `resendOtp()`, `changePassword()`. `MobileOtpController` → Phase 1b. |
+| Services | ✅ `AuthService::resendOtp()` / `changePassword()`. No per-role services added — the four `Auth/*AuthService` classes stay collapsed into one role-parameterized service. |
+| Repositories | ✅ `UserRepository` (Phase 0), plus `revokeOtherTokens()` |
 | Models | ✅ `User` |
-| FormRequests | `Auth/ChangePasswordRequest`, `Auth/ResendOtpRequest`, `Auth/SendMobileOtpRequest`, `Auth/VerifyMobileOtpRequest` (all exist in MealHub) |
+| FormRequests | ✅ `Auth/ChangePasswordRequest`, `Auth/ResendOtpRequest`. `Send`/`VerifyMobileOtpRequest` → Phase 1b. |
 | Resources | ✅ `UserResource` |
 | Policies | — |
-| Routes | Four additions to the `$registerAuthRoutes` closure in `routes/api.php`; apply the new role middleware to `logout` |
-| Notifications | ✅ `OtpNotification`. Port `{Customer,Restaurant,Rider}VerifyAccountNotification` as **one** role-parameterized class, mirroring the `OtpNotification` consolidation. |
+| Routes | ✅ `resend-otp` + `change-password` per role; `role:{role}` applied to `change-password` and `logout` |
+| Notifications | ✅ `OtpNotification` role-parameterized. The three `*VerifyAccountNotification` classes were **not** ported as a link-based email — see the note below. |
 | Events | — |
 | Seeders / Factories | ✅ |
-| Feature Tests | Extend `tests/Feature/Auth/`. New: `ChangePasswordTest`, `ResendOtpTest`, `MobileOtpTest`, and `RoleGateTest` asserting a customer token gets 403 on an admin-prefixed route. |
-| Documentation | Update `docs/features/authentication.md` |
+| Feature Tests | ✅ `ChangePasswordTest`, `ResendOtpTest`, `RoleGateTest`. `MobileOtpTest` → Phase 1b. |
+| Documentation | ✅ `docs/features/authentication.md` |
 
 **Key artifact:** `app/Http/Middleware/EnsureUserHasRole.php`, aliased in `bootstrap/app.php` as
 `role:admin` etc. The alternative — Sanctum token abilities issued at login — is rejected: a
 token minted before a role change would keep the old ability, and route files read worse.
+
+**On the `*VerifyAccountNotification` port.** Those three classes email an activation *link* to
+MealHub's own Blade routes (`route('verify.new.restaurant', …)`). Reproducing that here would
+reintroduce link-based verification into an OTP-based API, and point it at a URL that does not
+exist — the SPA's address is not known until `FRONTEND_URL` lands in Phase 7. What was actually
+worth porting is the only thing that differed between the three: a single "what you can do once
+verified" line. That is now the `$role` argument to `OtpNotification`. Do not add a fourth
+notification class for this.
+
+**Two testing gotchas found here**, both worth knowing before writing Phase 2's tests:
+
+- The sanctum guard **memoizes the resolved user for the lifetime of a test method**. A test that
+  makes two authenticated requests as *different* users sees the first user both times. Use a
+  data provider (one case per role) rather than looping inside one test.
+- `Sanctum::actingAs()` yields a `TransientToken`, which has no primary key — so it breaks any
+  code that keys off `currentAccessToken()`, including `UserRepository::revokeOtherTokens()`.
+  These tests mint real tokens and send a `Bearer` header, matching the rest of `tests/Feature/Auth/`.
+
+---
+
+## Phase 1b — Mobile-OTP login (deferred, backlog)
+
+Ports `Frontend\AuthController@sendMobileOtp` / `verifyMobileOtp` — a passwordless customer login
+by mobile number. Deferred out of Phase 1 rather than dropped; nothing depends on it.
+
+**Two blockers, both must be resolved before this is worth building:**
+
+1. **No SMS delivery exists.** MealHub's `sendMobileOtp` generates an OTP, stores it, and returns
+   it to a controller that discards it — while telling the user "a one-time code has been sent to
+   your mobile." Its `config/services.php` has an `sms` block with a `log` driver, but **no code
+   reads it** (`grep -rn "services.sms" app/` finds nothing). Porting as-is ships a login flow no
+   legitimate user can complete. Needs an SMS provider decision, which is a dependency addition
+   and therefore needs approval per CLAUDE.md.
+2. **`users.mobile` is nullable and not unique.** A passwordless login keyed on it resolves to an
+   arbitrary matching row. Needs a migration adding a unique index — realistically unique per
+   `(role, mobile)`, since the four roles share the table.
+
+When it does land: `Api/V1/Auth/MobileOtpController`, `Auth/SendMobileOtpRequest`,
+`Auth/VerifyMobileOtpRequest`, `UserRepository::findByMobileAndRole()`, and
+`tests/Feature/Auth/MobileOtpTest.php`. Note MealHub's version is **customer-only** and gives the
+mobile OTP a 5-minute TTL rather than the 10 minutes used for email.
 
 ---
 

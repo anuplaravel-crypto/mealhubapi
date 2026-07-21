@@ -3,8 +3,10 @@
 namespace App\Http\Controllers\Api\V1\Auth;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Auth\ChangePasswordRequest;
 use App\Http\Requests\Auth\ForgotPasswordRequest;
 use App\Http\Requests\Auth\LoginRequest;
+use App\Http\Requests\Auth\ResendOtpRequest;
 use App\Http\Requests\Auth\ResetPasswordRequest;
 use App\Http\Requests\Auth\VerifyOtpRequest;
 use App\Http\Resources\UserResource;
@@ -60,6 +62,16 @@ abstract class BaseAuthController extends Controller
         ], 'Email verified successfully.');
     }
 
+    public function resendOtp(ResendOtpRequest $request): JsonResponse
+    {
+        $this->authService->resendOtp($request->validated('email'), $this->role());
+
+        return $this->successResponse(
+            null,
+            'If that account exists and is not yet verified, a new code has been sent.',
+        );
+    }
+
     public function login(LoginRequest $request): JsonResponse
     {
         [$user, $token] = $this->authService->login(
@@ -96,6 +108,19 @@ abstract class BaseAuthController extends Controller
         return $this->successResponse(
             null,
             'Password reset successfully. Please log in with your new password.',
+        );
+    }
+
+    public function changePassword(ChangePasswordRequest $request): JsonResponse
+    {
+        $this->authService->changePassword(
+            $request->user(),
+            $request->validated('password'),
+        );
+
+        return $this->successResponse(
+            null,
+            'Password changed successfully. Your other devices have been signed out.',
         );
     }
 

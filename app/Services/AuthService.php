@@ -53,7 +53,7 @@ class AuthService
         ]);
 
         if (! $isAdmin) {
-            $user->notify(new OtpNotification($user->otp, 'registration'));
+            $user->notify(new OtpNotification($user->otp, 'registration', $role));
         }
 
         return $user;
@@ -111,6 +111,45 @@ class AuthService
         }
 
         return [$user, $this->users->issueToken($user, 'auth-token')];
+    }
+
+    /**
+     * Re-send the registration OTP if the address belongs to an as-yet
+     * unverified user of this role.
+     *
+     * Like forgotPassword(), this silently no-ops for an unknown address —
+     * and for an already-verified one — so the endpoint never reveals
+     * whether an email is registered, or how far through signup it is.
+     */
+    public function resendOtp(string $email, string $role): void
+    {
+        $user = $this->findByEmailAndRole($email, $role);
+
+        if (! $user || $user->is_email_verified) {
+            return;
+        }
+
+        $this->users->update($user, [
+            'otp' => $this->generateOtp(),
+            'otp_expires_at' => now()->addMinutes(self::OTP_TTL_MINUTES),
+        ]);
+
+        $user->notify(new OtpNotification($user->otp, 'registration', $role));
+    }
+
+    /**
+     * Change the password of an already-authenticated user.
+     *
+     * The current password is verified by ChangePasswordRequest, so by the
+     * time this runs the caller has proven they know it.
+     */
+    public function changePassword(User $user, string $password): void
+    {
+        $this->users->update($user, ['password' => $password]);
+
+        // Sign out the user's other devices, but not the one making the
+        // change — unlike resetPassword(), which revokes everything.
+        $this->users->revokeOtherTokens($user);
     }
 
     /**

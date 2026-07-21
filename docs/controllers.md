@@ -8,6 +8,16 @@ Only controllers reachable from a registered route are documented here — see [
 
 **File:** `app/Http/Controllers/Api/V1/Auth/AdminAuthController.php`
 
+### `changePassword(ChangePasswordRequest $request): JsonResponse`
+
+**Request body**
+
+| Field | Rules |
+|---|---|
+| current_password | `required|string|current_password:sanctum` |
+| password | `required|confirmed|different:current_password|Password` |
+
+
 ### `forgotPassword(ForgotPasswordRequest $request): JsonResponse`
 
 **Request body**
@@ -45,6 +55,15 @@ Admins register with a reduced field set and are created pre-verified,
 | password | `required|confirmed|Password` |
 
 
+### `resendOtp(ResendOtpRequest $request): JsonResponse`
+
+**Request body**
+
+| Field | Rules |
+|---|---|
+| email | `required|email` |
+
+
 ### `resetPassword(ResetPasswordRequest $request): JsonResponse`
 
 **Request body**
@@ -71,6 +90,16 @@ Admins register with a reduced field set and are created pre-verified,
 ## Api\V1\Auth\CustomerAuthController
 
 **File:** `app/Http/Controllers/Api/V1/Auth/CustomerAuthController.php`
+
+### `changePassword(ChangePasswordRequest $request): JsonResponse`
+
+**Request body**
+
+| Field | Rules |
+|---|---|
+| current_password | `required|string|current_password:sanctum` |
+| password | `required|confirmed|different:current_password|Password` |
+
 
 ### `forgotPassword(ForgotPasswordRequest $request): JsonResponse`
 
@@ -114,6 +143,15 @@ Admins register with a reduced field set and are created pre-verified,
 | country_id | `nullable|exists:countries,id` |
 | county_id | `nullable|exists:counties,id` |
 | city_id | `nullable|exists:cities,id` |
+
+
+### `resendOtp(ResendOtpRequest $request): JsonResponse`
+
+**Request body**
+
+| Field | Rules |
+|---|---|
+| email | `required|email` |
 
 
 ### `resetPassword(ResetPasswordRequest $request): JsonResponse`
@@ -143,6 +181,16 @@ Admins register with a reduced field set and are created pre-verified,
 
 **File:** `app/Http/Controllers/Api/V1/Auth/RestaurantAuthController.php`
 
+### `changePassword(ChangePasswordRequest $request): JsonResponse`
+
+**Request body**
+
+| Field | Rules |
+|---|---|
+| current_password | `required|string|current_password:sanctum` |
+| password | `required|confirmed|different:current_password|Password` |
+
+
 ### `forgotPassword(ForgotPasswordRequest $request): JsonResponse`
 
 **Request body**
@@ -185,6 +233,15 @@ Admins register with a reduced field set and are created pre-verified,
 | country_id | `nullable|exists:countries,id` |
 | county_id | `nullable|exists:counties,id` |
 | city_id | `nullable|exists:cities,id` |
+
+
+### `resendOtp(ResendOtpRequest $request): JsonResponse`
+
+**Request body**
+
+| Field | Rules |
+|---|---|
+| email | `required|email` |
 
 
 ### `resetPassword(ResetPasswordRequest $request): JsonResponse`
@@ -214,6 +271,16 @@ Admins register with a reduced field set and are created pre-verified,
 
 **File:** `app/Http/Controllers/Api/V1/Auth/RiderAuthController.php`
 
+### `changePassword(ChangePasswordRequest $request): JsonResponse`
+
+**Request body**
+
+| Field | Rules |
+|---|---|
+| current_password | `required|string|current_password:sanctum` |
+| password | `required|confirmed|different:current_password|Password` |
+
+
 ### `forgotPassword(ForgotPasswordRequest $request): JsonResponse`
 
 **Request body**
@@ -256,6 +323,15 @@ Admins register with a reduced field set and are created pre-verified,
 | country_id | `nullable|exists:countries,id` |
 | county_id | `nullable|exists:counties,id` |
 | city_id | `nullable|exists:cities,id` |
+
+
+### `resendOtp(ResendOtpRequest $request): JsonResponse`
+
+**Request body**
+
+| Field | Rules |
+|---|---|
+| email | `required|email` |
 
 
 ### `resetPassword(ResetPasswordRequest $request): JsonResponse`
