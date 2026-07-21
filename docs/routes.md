@@ -58,6 +58,12 @@ Every application route is defined in `routes/api.php` and auto-prefixed with `/
 | POST | `/api/v1/login` | api.v1.customer.login | CustomerAuthController@login | api, throttle:6,1 |
 | POST | `/api/v1/logout` | api.v1.customer.logout | CustomerAuthController@logout | api, auth:sanctum, role:customer |
 | GET | `/api/v1/media/profile-picture` | api.v1.media.profile-picture | MediaController@show | api, auth:sanctum |
+| GET | `/api/v1/notifications` | api.v1.notifications.index | NotificationController@index | api, auth:sanctum |
+| PATCH | `/api/v1/notifications/read-all` | api.v1.notifications.read-all | NotificationController@markAllAsRead | api, auth:sanctum |
+| GET | `/api/v1/notifications/unread` | api.v1.notifications.unread | NotificationController@unread | api, auth:sanctum |
+| DELETE | `/api/v1/notifications/{notification}` | api.v1.notifications.destroy | NotificationController@destroy | api, auth:sanctum |
+| PATCH | `/api/v1/notifications/{notification}/read` | api.v1.notifications.read | NotificationController@markAsRead | api, auth:sanctum |
+| PATCH | `/api/v1/notifications/{notification}/toggle-read` | api.v1.notifications.toggle-read | NotificationController@toggleRead | api, auth:sanctum |
 | GET | `/api/v1/profile` | api.v1.profile.show | ProfileController@show | api, auth:sanctum |
 | PUT | `/api/v1/profile` | api.v1.profile.update | ProfileController@update | api, auth:sanctum |
 | POST | `/api/v1/profile/picture` | api.v1.profile.picture.update | ProfileController@updatePicture | api, auth:sanctum |

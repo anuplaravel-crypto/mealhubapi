@@ -72,7 +72,7 @@ it, Phase 10 or 11 would mean "any logged-in customer can edit the home page".
                                               ├─→ 8. Rider vehicle
                                               ├─→ 9. Restaurant documents
                                               └─→ 10. Admin CMS write
-                         6. Notifications ────┴─→ 11. Admin user mgmt ─→ 12. Dashboards
+                         6. Notifications ✅ ──┴─→ 11. Admin user mgmt ─→ 12. Dashboards
                          7. Newsletter
                         13. Terms & conditions (net-new, backlog)
 ```
@@ -127,7 +127,7 @@ domain — see the table below.
 | `LocationRepository` | 2 |
 | `Cms/*` (7 read classes) | 3 (read) → 10 (write) |
 | `Cms/SectionFeatureRepository` | 10 — reads go through `HomeSectionRepository`'s eager load |
-| `NotificationRepository` | 6 |
+| `NotificationRepository` | 6 ✅ |
 | `NewsletterSubscriberRepository` | 7 |
 | `RiderVehicleRepository` | 8 |
 | `CustomerRepository`, `RestaurantRepository`, `RiderRepository` | 11 |
@@ -431,9 +431,9 @@ deferred streaming controller. `php artisan test --compact`: 200 passed.
   `MediaPlacement::Cms` because a public URL is the only thing it can build.
 - **The media route takes no id, so it needs no Policy.** The roadmap's Phase 5 line ("self-scoped,
   never an ID from the request") and its Definition of Done ("a Policy wherever an ID arrives from
-  the URL") only agree if the streaming route stays self-scoped — so it does. Phase 9's
-  `v1/admin/restaurants/{user}/documents/{slot}` is the first route that must bring one, and
-  `app/Policies/` still does not exist.
+  the URL") only agree if the streaming route stays self-scoped — so it does. Phase 6's
+  `v1/notifications/{notification}` turned out to be the first route needing one, and created
+  `app/Policies/`; Phase 9's `v1/admin/restaurants/{user}/documents/{slot}` is the next.
 - **Location ids are checked for existence, not for consistency**, matching `RegisterRequest`: a
   `city_id` from a different county is accepted. Tightening that is a change to both requests, not
   to this endpoint alone, so it was left as known debt rather than a silent divergence.
@@ -449,22 +449,61 @@ authenticated request.
 
 ---
 
-## Phase 6 — Notifications
+## Phase 6 — Notifications ✅ Complete
+
+The first phase where an id arrives from the URL, and therefore the one that finally created
+`app/Policies/`. `php artisan test --compact`: 242 passed.
 
 | Category | Work |
 | --- | --- |
-| Controllers | `Api/V1/NotificationController` — `index`, `unread`, `markAsRead`, `markAllAsRead`, `toggleRead`, `destroy`. One controller replaces MealHub's four identical per-role ones (24 routes → 6). |
-| Services | `NotificationService` (port, merging `Admin/AdminNotificationService` and `Customer/CustomerNotificationService`) |
-| Repositories | `NotificationRepository` (port) |
-| Models | ✅ `notifications` migration ported; uses Laravel's `DatabaseNotification`, no custom model |
-| FormRequests | — |
-| Resources | `NotificationResource` plus a paginated collection — settle the pagination envelope here (Phase 0.2), it recurs through Phases 10–12 |
-| Policies | `NotificationPolicy` — owner-only. The first real policy in the codebase; `{id}` comes from the URL, so ownership must be enforced. |
-| Routes | `v1/notifications/*` under `auth:sanctum` |
-| Notifications | Port and consolidate: `{Customer,Restaurant,Rider}RegistrationNotification` → one role-parameterized class; same for `AccountStatusNotification`. Keep the `FormatsUserDetails` trait. |
-| Events | Recommended (net-new): `UserStatusChanged` + listener, decoupling Phase 11's toggle from mail sending |
-| Feature Tests | `tests/Feature/Notifications/` — list and unread counts, mark-read idempotency, 403 on another user's notification, pagination |
-| Documentation | New `docs/features/notifications.md` |
+| Controllers | ✅ `Api/V1/NotificationController` — `index`, `unread`, `markAsRead`, `markAllAsRead`, `toggleRead`, `destroy`. One controller replacing MealHub's four identical per-role ones (24 routes → 6). |
+| Services | ✅ `NotificationService` — flat under `app/Services/`, matching `AuthService` and `ProfileService`. MealHub's abstract-plus-subclass split did not survive; see below. |
+| Repositories | ✅ `NotificationRepository`, rebased on `BaseRepository<DatabaseNotification>` — the one repository whose model is the framework's rather than ours |
+| Models | ✅ `notifications` migration already ported; uses Laravel's `DatabaseNotification`, no custom model |
+| FormRequests | — (no endpoint takes a body; the page size is fixed rather than client-supplied) |
+| Resources | ✅ `NotificationResource`, served through the Phase 0 `paginatedResponse()` — the first live use of that envelope |
+| Policies | ✅ `NotificationPolicy` — owner-only, **the first Policy in the codebase**, registered by hand in `AppServiceProvider` |
+| Routes | ✅ `v1/notifications/*` under `auth:sanctum`, no `role:` gate — same reasoning as the profile routes |
+| Notifications | ✅ `RegistrationNotification` and `AccountStatusNotification`, each one role-parameterized class replacing three. `Concerns/FormatsUserDetails` kept. |
+| Events | ✅ `UserStatusChanged` + `Listeners/SendAccountStatusNotification`, net-new. No producer until Phase 11 — that is the point. |
+| Seeders / Factories | ✅ net-new `Database\Factories\DatabaseNotificationFactory` |
+| Feature Tests | ✅ `tests/Feature/Notifications/NotificationTest.php` (29) and `AccountNotificationTest.php` (12); the factory added to `FactoryIntegrityTest` |
+| Documentation | ✅ [features/notifications.md](features/notifications.md). `mkdocs.yml` `nav:` also gained the two Phase 4/5 pages that were never listed. |
+
+**Five decisions worth keeping:**
+
+- **Ownership is a 403, not a silent no-op.** MealHub scoped every lookup to the notifiable, so an
+  id belonging to somebody else matched nothing and still answered "success" — a delete that
+  deleted nothing reported success. Here the row is resolved by route-model binding and the Policy
+  decides: another user's id is 403, an unknown id is 404. The Policy compares `notifiable_type` as
+  well as `notifiable_id`; there is only one notifiable today, which is exactly why that check is
+  easy to omit now and expensive to add back later.
+- **`Gate::policy()` is registered by hand and must stay that way.** Policy discovery maps
+  `App\Models\X` to `App\Policies\XPolicy`, and `DatabaseNotification` is in neither namespace.
+  The failure mode is uniform 403s rather than an open door — `Gate::authorize()` denies an ability
+  it cannot resolve — but only a test exercising the endpoints would notice.
+- **One service, no subclasses.** MealHub's abstract `NotificationService` existed so each role's
+  subclass could override `extraPayload()` and lift different keys out of the stored blob for its
+  own popup script. An API has no popup: the Resource ships `data` whole. That removed the only
+  reason the subclasses existed.
+- **`type` is the payload's semantic token, never the notification class name.** The column holds
+  `App\Notifications\RegistrationNotification`; exposing it would leak an internal name and break
+  clients on a rename. Same family of decision as `route_key` and the dropped CSS helpers.
+- **`AccountStatusNotification` ships with an event seam and no producer.** Phase 11's toggle fires
+  `UserStatusChanged`; the notification is a listener's job. MealHub's three management services
+  each called `$user->notify(...)` inline, and Phase 11 has a *second* consequence for the same
+  moment (a deactivated rider's `RiderVehicle.is_active`). That is a second listener, not a second
+  line in the toggle. Unlike the deferrals in Phases 0/3/4 this is not a placeholder — the class and
+  the listener are complete and tested by dispatching the event.
+
+**One thing this phase changed outside its own domain:** `AuthService::register()` now notifies
+every admin (`UserRepository::admins()`) when a customer, restaurant or rider signs up — at signup,
+not at OTP verification, since an admin's approval queue should not depend on whether the applicant
+has opened their email. An admin registering another admin raises nothing.
+
+**No dashboard link in the activation email.** MealHub's ended with a button pointing at its own
+Blade route; there is no such URL until `FRONTEND_URL` lands in Phase 7 — the same reason
+`OtpNotification` sends a code rather than a link. Add the action there, not a placeholder here.
 
 ---
 

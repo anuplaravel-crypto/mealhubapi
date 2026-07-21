@@ -4,8 +4,10 @@ namespace App\Services;
 
 use App\Models\User;
 use App\Notifications\OtpNotification;
+use App\Notifications\RegistrationNotification;
 use App\Repositories\UserRepository;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
@@ -54,6 +56,13 @@ class AuthService
 
         if (! $isAdmin) {
             $user->notify(new OtpNotification($user->otp, 'registration', $role));
+
+            // Admins are told about the signup immediately, not on verification:
+            // a restaurant or rider is waiting on an admin to approve them, and
+            // the queue an admin works from should not depend on whether the
+            // applicant has opened their email yet. An admin registering
+            // another admin raises nothing — that is not news to anybody.
+            Notification::send($this->users->admins(), new RegistrationNotification($user));
         }
 
         return $user;

@@ -7,6 +7,7 @@ use App\Http\Controllers\Api\V1\Auth\RiderAuthController;
 use App\Http\Controllers\Api\V1\HomeController;
 use App\Http\Controllers\Api\V1\LocationController;
 use App\Http\Controllers\Api\V1\MediaController;
+use App\Http\Controllers\Api\V1\NotificationController;
 use App\Http\Controllers\Api\V1\ProfileController;
 use Illuminate\Support\Facades\Route;
 
@@ -98,4 +99,30 @@ Route::prefix('v1')->name('api.v1.')->group(function () use ($registerAuthRoutes
         Route::post('profile/picture', [ProfileController::class, 'updatePicture'])->name('profile.picture.update');
         Route::get('media/profile-picture', [MediaController::class, 'show'])->name('media.profile-picture');
     });
+
+    /*
+    |----------------------------------------------------------------------
+    | In-app notifications (every role)
+    |----------------------------------------------------------------------
+    |
+    | Shared by all four roles for the same reason the profile routes are:
+    | every role has notifications, and a role: gate listing all four would
+    | gate nothing. What makes these safe is different, though — four of them
+    | take an id, so NotificationPolicy proves ownership inside the
+    | controller. The two literal paths are declared before the {notification}
+    | ones so `unread` and `read-all` are never read as an id.
+    |
+    */
+    Route::middleware('auth:sanctum')
+        ->controller(NotificationController::class)
+        ->prefix('notifications')
+        ->name('notifications.')
+        ->group(function () {
+            Route::get('/', 'index')->name('index');
+            Route::get('unread', 'unread')->name('unread');
+            Route::patch('read-all', 'markAllAsRead')->name('read-all');
+            Route::patch('{notification}/read', 'markAsRead')->name('read');
+            Route::patch('{notification}/toggle-read', 'toggleRead')->name('toggle-read');
+            Route::delete('{notification}', 'destroy')->name('destroy');
+        });
 });

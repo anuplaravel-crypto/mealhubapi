@@ -16,6 +16,7 @@ use App\Models\SectionFeature;
 use App\Models\SiteSetting;
 use App\Models\Testimonial;
 use App\Models\User;
+use Database\Factories\DatabaseNotificationFactory;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -190,6 +191,34 @@ class FactoryIntegrityTest extends TestCase
 
         $this->assertSame('Top rated', FeaturedRestaurant::factory()->topRated()->create()->tag);
         $this->assertFalse(FeaturedRestaurant::factory()->unpublished()->create()->is_published);
+    }
+
+    /**
+     * The only factory whose model is not one of ours — Laravel's
+     * `DatabaseNotification` has no `HasFactory`, so it is instantiated
+     * directly rather than through `Model::factory()`.
+     */
+    public function test_database_notification_factory_and_states(): void
+    {
+        $default = DatabaseNotificationFactory::new()->create();
+
+        $this->assertNull($default->read_at);
+        $this->assertInstanceOf(User::class, $default->notifiable);
+        $this->assertSame('customer_registration', $default->data['type']);
+
+        $user = User::factory()->rider()->create();
+        $this->assertTrue($user->is(DatabaseNotificationFactory::new()->forUser($user)->create()->notifiable));
+
+        $this->assertNotNull(DatabaseNotificationFactory::new()->read()->create()->read_at);
+        $this->assertNull(DatabaseNotificationFactory::new()->read()->unread()->create()->read_at);
+
+        $deactivated = DatabaseNotificationFactory::new()->accountStatus(activated: false)->create();
+        $this->assertSame('account_status', $deactivated->data['type']);
+        $this->assertFalse($deactivated->data['activated']);
+
+        // The uuid primary key is the factory's to generate; nothing on the
+        // model fills it in.
+        $this->assertCount(2, DatabaseNotificationFactory::new()->count(2)->create()->pluck('id')->unique());
     }
 
     /**

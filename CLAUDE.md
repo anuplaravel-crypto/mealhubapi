@@ -209,16 +209,18 @@ Controllers must only: validate (via a Form Request), delegate to a service, and
 | Service | business rules, transactions, orchestrating repositories | direct `Model::query()` |
 | Repository | Eloquent queries only; returns models/collections | business rules, Request/Response objects, mail |
 
-The **authentication module is the established reference implementation** of the controller/service/repository/Form Request/Resource split — follow its structure for new domains (see `app/Http/Controllers/Api/V1/Auth/`, `app/Services/AuthService.php`, `app/Repositories/UserRepository.php`, and [docs/controllers.md](docs/controllers.md)).
+The **authentication module is the established reference implementation** of the controller/service/repository/Form Request/Resource split — follow its structure for new domains (see `app/Http/Controllers/Api/V1/Auth/`, `app/Services/AuthService.php`, `app/Repositories/UserRepository.php`, and [docs/controllers.md](docs/controllers.md)). For a domain that is not role-scoped, `Api/V1/ProfileController` + `ProfileService` is the smaller, newer example of the same shape.
 
 - `app/Http/Controllers/Api/{Version}/` — versioned API controllers. **Versioning has started at `V1`**; put new versioned controllers under `app/Http/Controllers/Api/V1/`, grouped in a sub-namespace by domain when a domain has several (e.g. `Api/V1/Auth/`). Share behavior across related controllers via an abstract base controller rather than copy-paste (see `Auth/BaseAuthController`).
-- `app/Services/` — business logic lives here, injected via constructor property promotion. `AuthService` is the current domain example; one service per domain concern. (`app/Services/Docs/` is a separate non-domain tooling engine behind `docs:generate` — see "Documentation" — not a template for domain services.)
-- `app/Repositories/` — every Eloquent query lives here, one class per model, extending the abstract `BaseRepository` (which owns the generic `find`/`findOrFail`/`all`/`paginate`/`create`/`update`/`delete` shape, so concrete classes declare only their model and their genuinely specific queries). `UserRepository` is the current example. Repositories return models and collections — never arrays, never DTOs. Repositories arrive with the domain that needs them; see the per-phase table in [docs/roadmap.md](docs/roadmap.md).
-- `app/Http/Requests/` — one Form Request per validated action, grouped by domain (e.g. `app/Http/Requests/Auth/`). Controllers must not call `$request->validate()` inline. `authorize()` returns `true` for public/pre-auth endpoints.
-- `app/Http/Resources/` — every API response that returns a model or collection goes through an Eloquent API Resource (`UserResource` is the current example). Controllers must not return raw models or arrays built ad hoc.
+- `app/Services/` — business logic lives here, injected via constructor property promotion. One service per domain concern: `AuthService`, `LocationService`, `ProfileService` sit flat; a domain with several classes gets a sub-namespace (`Services/Cms/HomePageService`, `Services/Media/`). **Role-parameterize rather than duplicate** — `AuthService` and `ProfileService` each replace four near-identical per-role services from MealHub, taking the role as an argument. (`app/Services/Docs/` is a separate non-domain tooling engine behind `docs:generate` — see "Documentation" — not a template for domain services.)
+- `app/Repositories/` — every Eloquent query lives here, one class per model, extending the abstract `BaseRepository` (which owns the generic `find`/`findOrFail`/`all`/`paginate`/`create`/`update`/`delete` shape, so concrete classes declare only their model and their genuinely specific queries). `UserRepository`, `LocationRepository` and `Repositories/Cms/*` (7 read-only classes) exist today. Repositories return models and collections — never arrays, never DTOs. Repositories arrive with the domain that needs them; see the per-phase table in [docs/roadmap.md](docs/roadmap.md).
+- `app/Http/Requests/` — one Form Request per validated action, grouped by domain (`Requests/Auth/`, `Requests/Profile/`). Controllers must not call `$request->validate()` inline. `authorize()` returns `true` for public/pre-auth endpoints **and** for self-scoped ones that act on `$request->user()` — there is no per-record ownership to check when no id arrives. `Requests/Concerns/` holds shared rule sets (`ValidatesUploadedImage`); compose from these rather than restating rules.
+- `app/Http/Resources/` — every API response that returns a model or collection goes through an Eloquent API Resource. Controllers must not return raw models or arrays built ad hoc. `Resources/Concerns/` holds shared transformations (`ResolvesImageUrl`).
 - `app/Http/Traits/` — shared HTTP concerns (currently the `ApiResponse` envelope trait; see "Consistent JSON API Responses" below).
 - `app/Exceptions/` — `DomainException` is the base for expected business-rule failures. Services throw it with an explicit status instead of calling `abort()` (an HTTP concern) or throwing `ValidationException` for a failure that is not a validation failure.
-- `app/Notifications/` — mail/database notifications (currently `OtpNotification`, used for registration and password-reset OTP emails).
+- `app/Notifications/` — mail/database notifications: `OtpNotification` (registration and password-reset codes), `RegistrationNotification` (to admins), `AccountStatusNotification` (to the user). All three are **one role-parameterized class replacing MealHub's three or four** — do not re-split them per role. `Notifications/Concerns/` holds shared formatting (`FormatsUserDetails`).
+- `app/Policies/` — one class per authorized model, and **required wherever an id arrives from the URL** (`NotificationPolicy` is the only one so far). Non-`App\Models` policies must be registered in `AppServiceProvider`.
+- `app/Events/` + `app/Listeners/` — for consequences that should not be wired into the action causing them (`UserStatusChanged` → `SendAccountStatusNotification`). Listeners are auto-discovered from `app/Listeners`; verify with `php artisan event:list`.
 - `app/Models/` — Eloquent models. Use the `casts()` method (not the `$casts` property) for new casts, per Laravel 12 convention. See [docs/models.md](docs/models.md) for the current schema and relationships.
 
 Before adding a new service, action, or resource, search the codebase for an existing one that already covers the behavior (or most of it) and extend/reuse it instead of duplicating logic. This includes shared query scopes, form request rules, and resource transformations.
@@ -274,18 +276,34 @@ Route::middleware(['auth:sanctum', 'role:admin'])->group(...);   // one role
 Route::middleware(['auth:sanctum', 'role:admin,restaurant'])->…; // several
 ```
 
+**The one exception is a route every role may call for itself** — `v1/profile*` and
+`v1/media/profile-picture` carry `auth:sanctum` alone. A `role:` gate there would list all four
+roles and gate nothing. What makes that safe is that the action takes **no id**: it works on
+`$request->user()`, so there is no other row to reach. `v1/notifications*` joins them on the same
+terms — but four of its routes *do* take an id, so they carry `NotificationPolicy`. **Adding an id
+to a non-role-gated route means adding a Policy in the same change**, and registering it: policy
+discovery only maps `App\Models\X` to `App\Policies\XPolicy`, so anything else (e.g. the
+framework's `DatabaseNotification`) needs an explicit `Gate::policy()` in `AppServiceProvider`.
+
 The gate reads `users.role` on every request rather than using Sanctum token abilities — a token minted before a role change would keep a stale ability. A mismatched role is a 403; a missing token stays a 401 (never leak that a route exists for some other role). Role-scoping in `AuthService` is a separate concern: it covers credential *lookup*, not request authorization.
 
 **Implemented and role-scoped.** The four roles (`customer`, `admin`, `restaurant`, `rider`) share one `users` table and each have their own registration/verify-otp/resend-otp/login/forgot-password/reset-password/change-password/logout endpoints under `/api/v1` (customer at the root; admin/restaurant/rider under a path prefix). `AuthService` scopes every lookup by role, so credentials for one role are never valid at another's endpoints. Registration and password reset are **OTP-based** (6-digit code emailed via the role-parameterized `OtpNotification`), not link-based — there is no frontend URL to link to until `FRONTEND_URL` lands in Phase 7. Full behavior lives in [docs/features/authentication.md](docs/features/authentication.md) — reference it rather than restating the rules here.
 
-## Domain Models Beyond Auth (schema only — no API surface yet)
+## Domain Models Beyond Auth
 
-Beyond `User`, the schema carries several domains that have models, migrations, factories, and seed data wired up but **no controllers, services, Form Requests, Resources, or routes yet** — the only live endpoints are auth (see `php artisan route:list --path=api`). When you build their API, follow the auth module's thin-controller/fat-service pattern.
+The whole schema is ported; the HTTP layer is being built domain by domain (`php artisan route:list --path=api` is the truth). Roadmap phases 0–6 have shipped.
 
-- **Geo reference data** — `Country`, `County`, `City` (nested hierarchy). `User` `belongsTo` each via `country_id` / `county_id` / `city_id`. Seeded by `LocationSeeder` (3 countries / 8 counties / 24 cities).
+**Live API surface** — each has a hand-written doc; reference it rather than restating the rules:
+
+- **Geo reference data** — `Country`, `County`, `City` (nested hierarchy). `User` `belongsTo` each via `country_id` / `county_id` / `city_id`. Seeded by `LocationSeeder` (3 countries / 8 counties / 24 cities). Public read-only cascade: [docs/features/locations.md](docs/features/locations.md).
+- **Home-page CMS** — `SiteSetting` (singleton), `HomeStat`, `NavMenu`, `HomeSection` + `SectionFeature`, `MealCategory`, `FeaturedRestaurant`, `Testimonial`. Seeded with the content MealHub's public home page ships, so a client rendering from these produces the same site. **Read-only so far** — one anonymous `GET v1/home`; the admin write surface is Phase 10. See [docs/features/home-cms.md](docs/features/home-cms.md).
+- **Profile** — self-service account maintenance for all four roles, plus the private-image read path. See [docs/features/profile.md](docs/features/profile.md).
+- **Notifications** — the in-app list, unread badge and read/delete actions for all four roles (Laravel's `DatabaseNotification`, no custom model), plus the admin-facing registration notice and the `UserStatusChanged` seam Phase 11 will fire. Home of the first Policy. See [docs/features/notifications.md](docs/features/notifications.md).
+
+**Schema only — models, migrations, factories and seed data, but no controllers, services, Form Requests, Resources, or routes.** When you build their API, follow the auth module's thin-controller/fat-service pattern.
+
 - **Terms & conditions** — `TermCondition` (role-scoped, versioned, `is_active`, authored by an admin via `created_by`) and the `TermConditionUser` pivot recording acceptance (`accepted_at`, `ip_address`). `User::acceptedTerms()` / `authoredTerms()` and `TermCondition::scopeActiveForRole()` are the entry points. Registration already captures `accept_registration_tnc` / `marketing_consent` on `User`.
 - **Rider onboarding** — `RiderVehicle` (one per rider, `User::vehicles()`). `is_active` is meant to track the rider's `users.status`, which an admin flips on approval.
-- **Home-page CMS** — `SiteSetting` (singleton), `HomeStat`, `NavMenu`, `HomeSection` + `SectionFeature`, `MealCategory`, `FeaturedRestaurant`, `Testimonial`. All seeded with the content MealHub's public home page ships, so a client rendering from these produces the same site.
 - **Newsletter** — `NewsletterSubscriber` (double opt-in; `status` and `is_mailable` are derived from the two timestamps, never stored).
 
 ### Ported from MealHub — decisions that must not be undone
@@ -293,12 +311,74 @@ Beyond `User`, the schema carries several domains that have models, migrations, 
 These models came from the sibling [MealHub](../MealHub) Blade app. Three adaptations were deliberate and are easy to "helpfully" revert:
 
 - **`nav_menus.route_key` is not a Laravel route name.** MealHub's column was `route_name` and its model resolved it via `route()`. This API has no named web routes and the SPA owns its routing, so the column holds an opaque token the client maps. Never reintroduce `route()` against it.
-- **No model resolves an image URL.** MealHub's models had `logoUrl` / `avatarSrc` / `imageSrc` accessors returning **root-relative** paths, which a cross-origin SPA cannot use. Models here expose raw `image` / `image_url` (and `logo`, `avatar` / `avatar_url`) columns only; resolving the pair into one absolute URL is the API Resource's job. The `IMAGE_COLLECTION` constants are kept as the storage-layout contract for the upload service that has not landed yet.
+- **No model resolves an image URL.** MealHub's models had `logoUrl` / `avatarSrc` / `imageSrc` accessors returning **root-relative** paths, which a cross-origin SPA cannot use. Models here expose raw `image` / `image_url` (and `logo`, `avatar` / `avatar_url`) columns only; resolving the pair into one absolute URL is the API Resource's job — see "Image uploads and storage" below. The `IMAGE_COLLECTION` constants are the storage-layout contract both sides build paths from.
 - **No model returns CSS.** `accent`, `variant` and `perk_variant` ship as bare semantic tokens; MealHub's Bootstrap-class helpers (`accentClass`, `linkClass`, `perkClass`, `accentSoft`, `starIcons`) were dropped. Known debt in the other direction: the `icon_class` columns still hold Bootstrap Icons strings inherited from the seed data — treat them as opaque tokens to map, and expect a reseed to bare names ("shop") eventually.
 
 `tests/Feature/Database/SeederIntegrityTest.php` pins the seeded row counts and the rules above (stat-bar values digits-only, the About badge's newline, no source-wrapping in section bodies). `FactoryIntegrityTest.php` exercises every factory state.
 
 See [docs/models.md](docs/models.md) (auto-generated) for the full field list.
+
+## Image Uploads and Storage
+
+One writer, one reader, one source of truth for paths. Full contract in
+[docs/features/media-uploads.md](docs/features/media-uploads.md); the rules that must not drift:
+
+- **`App\Services\Media\MediaPlacement` (enum) owns the storage layout** — disk, variant sizes and
+  path shape. Both the writer (`Media\ImageUploadService`) and the reader
+  (`Resources\Concerns\ResolvesImageUrl`) build paths through `MediaPlacement::path()`. Never
+  restate a path anywhere else; that is exactly how a reader and a writer stop agreeing.
+- **`MediaPlacement::Cms` is public, `::Personal` is private.** CMS imagery is served straight off
+  the `public` disk as absolute URLs — a cross-origin SPA must not proxy every logo through PHP.
+  Personal files (avatars, and restaurant documents in Phase 9) live on the `local` disk and come
+  back only through an authenticated controller (`Api/V1/MediaController`). A Resource therefore
+  emits an **endpoint address** for a personal image, never a storage URL.
+- **Every upload writes four files** (original + small/medium/large). Pass the outgoing filename as
+  `store(..., replacing: $old)` so its variants are deleted after the new ones are written —
+  skipping it orphans files nothing can reach.
+- **Validation is not the service's job**: size and format live in
+  `Requests\Concerns\ValidatesUploadedImage` (jpg/jpeg/png/webp, ≤2 MB, **no SVG** — an XSS vector
+  on a public disk). `ImageUploadService` assumes an already-validated upload.
+- **`php artisan storage:link` is required for a working dev environment** — without the symlink,
+  CMS images are written but every URL 404s.
+- Rendering uses `intervention/image` ^3.11 through `ImageManager::gd()` (Imagick is not installed).
+  The enum lives in `app/Services/Media/` rather than `app/Enums/` because there is no such base
+  folder yet and new ones need approval.
+
+### Rules for every future media feature
+
+These are binding on new code, not just a description of what exists. `grep -rn "Storage::" app/`
+should keep returning exactly what it returns today: writes only inside `ImageUploadService`.
+
+- **`ImageUploadService` is the single entry point for image storage.** Never call
+  `Storage::put()`, `Storage::putFile()`, `Storage::disk()->put()` or `Storage::delete()` from a
+  Controller, Service, Repository or Resource — every write, replacement and deletion goes through
+  the service. Reads are the deliberate exception: `ResolvesImageUrl` calls `Storage::disk()->url()`
+  and `MediaController` calls `Storage::disk()->response()`, because building a URL and streaming a
+  file are not writes. Both still take their *path* from `MediaPlacement`.
+- **Never concatenate a storage path by hand.** `MediaPlacement` is the only source of disk
+  selection, directory structure, variant naming and path generation; build every path with
+  `MediaPlacement::path()` (or `pathFor()` on the service, which existence-checks it too).
+- **Public media returns absolute URLs; private media never exposes a path.** Public today means
+  CMS imagery (site branding, sections, meal categories, featured restaurants, testimonials) and
+  whatever later CMS-style collections arrive — banners, product and category art. Private means
+  profile avatars now and restaurant documents in Phase 9. A Resource for a private file exposes an
+  **application endpoint** and the file is streamed through an authorization check; a filesystem
+  location must never reach a client.
+- **Replacement is an argument, never a follow-up delete.** Always
+  `ImageUploadService::store(..., replacing: $oldImage)`. Uploading first and deleting the old file
+  afterwards at the call site is prohibited: four phases each replace images, and one forgetting
+  leaves orphans. Cleanup order is the service's responsibility.
+- **Upload validation lives only in `ValidatesUploadedImage`.** Never restate size/format rules in
+  a Form Request; compose the trait so raising the ceiling or accepting a format stays one edit.
+- **The storage layout is an architectural contract.** Changing it means changing `MediaPlacement`,
+  `ImageUploadService`, `ResolvesImageUrl`, [docs/features/media-uploads.md](docs/features/media-uploads.md)
+  and the feature tests **in the same commit** — the round-trip test in
+  `tests/Feature/Media/ImageUploadServiceTest.php` is what proves the writer and reader still agree.
+- **No role-specific or module-specific upload services.** Customer, restaurant, rider, admin, CMS,
+  and any future product/category/banner media all reuse `ImageUploadService`, configured through a
+  `MediaPlacement` case. MealHub's split `CmsImageService` / `ProfileImageService` is exactly the
+  duplication this replaced — they had already drifted apart on format handling and quality. A new
+  storage behavior is a new enum case, not a new service.
 
 ## Testing
 
@@ -307,14 +387,63 @@ See [docs/models.md](docs/models.md) (auto-generated) for the full field list.
 - Do not consider a feature done until its tests exist and pass — see the Definition of Done below.
 - `tests/Feature/Database/` runs on **SQLite**, which ignores varchar limits. Run `php artisan migrate:fresh --seed` against MySQL before trusting a new factory or migration.
 
+Three conventions in the existing suites, each of which cost a debugging session to find:
+
+- **Mint a real token and send a `Bearer` header**, as `tests/Feature/{Auth,Profile}/` do. `Sanctum::actingAs()` yields a `TransientToken` with no primary key, which breaks anything keyed off `currentAccessToken()` (e.g. `UserRepository::revokeOtherTokens()`).
+- **The sanctum guard memoizes the resolved user for the lifetime of one test method.** A test making two authenticated requests as *different* users sees the first user both times — so a "user A cannot reach user B" test that acts as both passes for the wrong reason. Use one data-provider case per role, and set up the other user's state directly (factory/disk) rather than through a request.
+- **Upload tests use `Storage::fake('local')` and `Storage::fake('public')`**, and assert the private disk received the file *and* that the public one stayed empty.
+
 ## Documentation
 
-The `docs/` tree is the project's living documentation, rendered as a site with **MkDocs + Material** (`mkdocs.yml`, `requirements-docs.txt`; run `mkdocs serve` to preview). New top-level pages must be added to `mkdocs.yml`'s `nav:` by hand — it is explicit, so an unlisted file is invisible on the site. It has three kinds of files, maintained three different ways:
+The `docs/` tree is the project's living documentation, rendered as a site with **MkDocs + Material** (`mkdocs.yml`, `requirements-docs.txt`; run `mkdocs serve` to preview). Every new page — including each `docs/features/*.md` — must be added to `mkdocs.yml`'s `nav:` by hand; that nav is explicit, so an unlisted file is invisible on the site. It has three kinds of files, maintained three different ways:
 
 - **Auto-generated reference docs** — `docs/architecture.md`, `docs/controllers.md`, `docs/models.md`, `docs/routes.md`, and `docs/README.md` are produced by **`php artisan docs:generate`** (the `app/Services/Docs/` extractor/renderer engine), which runs automatically on every file edit via the PostToolUse hook. **Never hand-edit these** (they carry a "do not hand-edit" banner and would be overwritten) — if the content is wrong, fix the extractor/renderer in `app/Services/Docs/`. `docs:generate --check` fails if they're stale (for CI).
 - **Hand-written per-feature docs** (`docs/features/<feature>.md`) — one per domain concern, maintained by the `/project-docs` skill. For every feature, add/update: what it does and why, endpoints, request/response shape (reference the Form Request and Resource), and business rules/edge cases. These carry the intent the generator can't introspect.
 - **[docs/roadmap.md](docs/roadmap.md)** — the MealHub → MealHubApi migration plan: what is already ported, the phase order, per-domain file checklists, and the **Definition of Done** every phase must satisfy. Hand-written, not owned by `/project-docs` or the generator. Consult it before starting a new domain; update it when a phase completes or the plan changes.
 - A **`.githooks/pre-commit`** reminder warns (non-blocking) when code under `app/`, `routes/`, or `database/migrations/` is staged without any **`docs/features/`** change. It deliberately ignores the auto-generated reference docs — the PostToolUse hook regenerates those on every edit, so counting them would silence the reminder permanently. Enable per-clone with `git config core.hooksPath .githooks`.
+
+## Generated Documentation Rules
+
+The section above says *what* the three kinds of docs are; this one is the operating procedure for
+the generated ones. **Generated documentation is the source of truth for code reference, and is
+never edited by hand.**
+
+These five files are output of `php artisan docs:generate` and nothing else:
+
+- `docs/README.md`
+- `docs/architecture.md`
+- `docs/controllers.md`
+- `docs/models.md`
+- `docs/routes.md`
+
+If one of them is wrong, the defect is upstream: fix the application code it describes, or fix the
+extractor/renderer in `app/Services/Docs/`. Editing the Markdown only survives until the next
+generate.
+
+**Workflow.** Any change to Controllers, Services, Repositories, Models, Resources, Requests or
+Routes changes what these files should say, so run `php artisan docs:generate` before committing —
+the PostToolUse hook usually has already, and `docs:generate --check` is the CI gate. Read the
+resulting diff. **If it changes something you did not expect, find out why before committing it**;
+an unexplained diff in generated output is evidence about the environment or the generator, not
+noise to sweep in.
+
+**The generator needs a live database**, and today it degrades *silently* without one: with MySQL
+down it drops every "Columns (live schema)" table from `models.md` and replaces the role enum in
+`architecture.md` with a placeholder note. This has already produced a staged commit that would
+have deleted ~246 lines of schema reference. So:
+
+- Never commit generated documentation produced while the database was unreachable.
+- Restore it from Git (`git restore --staged --worktree docs/models.md docs/architecture.md`),
+  start the database, re-run `docs:generate`, and confirm the diff is empty or intentional.
+- Generated documentation must never silently lose schema information.
+- **Known improvement, not yet built:** `docs:generate` should exit non-zero when the database is
+  unreachable rather than writing incomplete output. Until it does, the diff review above is the
+  only thing standing between a stopped MySQL and a gutted reference doc.
+
+**MkDocs navigation is part of "done".** Whenever a manually maintained page is added — under
+`docs/features/` or anywhere else — verify it is listed in `mkdocs.yml`'s `nav:`. That nav is
+explicit, so an unlisted page is invisible on the rendered site: a page nobody can reach is not a
+finished page.
 
 ## Definition of Done
 
@@ -346,7 +475,9 @@ No feature or roadmap phase is complete until every box is ticked. This is the c
 
 - [ ] `vendor/bin/pint --dirty --format agent`
 - [ ] `docs/features/<name>.md` created or updated (`/project-docs`)
+- [ ] `php artisan docs:generate` re-run, and its diff read rather than assumed — see [Generated Documentation Rules](#generated-documentation-rules)
 - [ ] `php artisan docs:generate --check` passes
+- [ ] `mkdocs.yml` `nav:` lists every page added — an unlisted page is invisible on the site
 - [ ] No N+1 — query counts asserted on list and dashboard endpoints
 - [ ] One phase, one commit (`/commit-push`)
 

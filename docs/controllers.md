@@ -392,6 +392,40 @@ Stream the authenticated user's own profile picture.
 
 ---
 
+## Api\V1\NotificationController
+
+**File:** `app/Http/Controllers/Api/V1/NotificationController.php`
+
+### `destroy(DatabaseNotification $notification): JsonResponse`
+
+
+### `index(Request $request): JsonResponse`
+
+The caller's full history, newest first, one page at a time.
+
+
+### `markAllAsRead(Request $request): JsonResponse`
+
+Clear the caller's unread badge in one call, reporting how many
+
+
+### `markAsRead(DatabaseNotification $notification): JsonResponse`
+
+Mark one notification as read. Idempotent — a repeat is a 200, not an
+
+
+### `toggleRead(DatabaseNotification $notification): JsonResponse`
+
+Flip one notification between read and unread — how a user re-flags
+
+
+### `unread(Request $request): JsonResponse`
+
+The bell payload — unread count plus the newest unread notifications.
+
+
+---
+
 ## Api\V1\ProfileController
 
 **File:** `app/Http/Controllers/Api/V1/ProfileController.php`

@@ -60,6 +60,9 @@ nav:
       - Authentication: features/authentication.md
       - Locations: features/locations.md
       - Home CMS: features/home-cms.md
+      - Media Uploads: features/media-uploads.md
+      - Profile: features/profile.md
+      - Notifications: features/notifications.md
 
   - Testing:
       - Postman Testing: postman-testing.md

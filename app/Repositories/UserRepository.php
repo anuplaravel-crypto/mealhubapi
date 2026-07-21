@@ -3,6 +3,7 @@
 namespace App\Repositories;
 
 use App\Models\User;
+use Illuminate\Database\Eloquent\Collection;
 
 /**
  * @extends BaseRepository<User>
@@ -27,6 +28,20 @@ class UserRepository extends BaseRepository
             ->where('role', $role)
             ->where('email', $email)
             ->first();
+    }
+
+    /**
+     * Every admin account, the audience for the operational notifications a
+     * registration or a document upload raises.
+     *
+     * Returned as a collection for `Notification::send()`, which fans one
+     * notification out across all of them — there is no "the admin" row.
+     *
+     * @return Collection<int, User>
+     */
+    public function admins(): Collection
+    {
+        return $this->query()->where('role', 'admin')->get();
     }
 
     /**
