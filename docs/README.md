@@ -24,4 +24,5 @@ One per domain concern under `docs/features/`. These are **not** auto-generated 
 - [features/authentication.md](features/authentication.md)
 - [features/home-cms.md](features/home-cms.md)
 - [features/locations.md](features/locations.md)
+- [features/media-uploads.md](features/media-uploads.md)
 

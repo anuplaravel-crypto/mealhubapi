@@ -68,7 +68,7 @@ it, Phase 10 or 11 would mean "any logged-in customer can edit the home page".
    │
 1. Auth hardening ✅ ┬─→ 2. Geo reference (public) ✅       1b. Mobile OTP (deferred)
                     ├─→ 3. Public Home CMS (public, read-only) ✅
-                    └─→ 4. Media foundation ──┬─→ 5. Profile
+                    └─→ 4. Media foundation ✅┬─→ 5. Profile
                                               ├─→ 8. Rider vehicle
                                               ├─→ 9. Restaurant documents
                                               └─→ 10. Admin CMS write
@@ -352,24 +352,55 @@ with the write surface that needs it. Same reasoning as Phase 0's dropped `Passw
 
 ---
 
-## Phase 4 — Media / upload foundation
+## Phase 4 — Media / upload foundation ✅ Complete
 
-An enabler with few endpoints of its own. Phases 5, 8, 9 and 10 all need it; building it four
-times is the main duplication risk in this migration.
+An enabler with no endpoints of its own. Phases 5, 8, 9 and 10 all need it; building it four
+times is the main duplication risk in this migration. `php artisan test --compact`: 165 passed.
+
+**Deviation: `MediaController@show` was not built.** Nothing writes a private file until Phase 5,
+so the controller would have had a placeholder authorization path and no real data to stream. The
+service side of it — `pathFor()`, existence-checked against the private disk — ships here and is
+tested; the route and its Policy land with the first private upload. Same reasoning as Phase 0's
+dropped `PasswordResetRepository` and Phase 3's `SectionFeatureRepository`.
 
 | Category | Work |
 | --- | --- |
-| Controllers | `Api/V1/MediaController@show` **only** for private files (restaurant documents, Phase 9). Public images should be served from a public disk as absolute URLs — a cross-origin SPA should not proxy every avatar through PHP, which is what MealHub's `profile/image` route does. |
-| Services | `Media/ImageUploadService` — one service replacing MealHub's split `Cms/CmsImageService` + `Profile/ProfileImageService`. Honors each model's existing `IMAGE_COLLECTION` constant (already ported as the storage-layout contract). |
-| Repositories | — |
-| FormRequests | `Concerns/ValidatesUploadedImage` — merge MealHub's near-duplicate `Cms/Concerns/ValidatesCmsImage` and `Profile/Concerns/ValidatesProfilePicture` |
-| Resources | `Concerns/ResolvesImageUrl` (from Phase 3) |
-| Policies / Routes / Notifications / Events | minimal |
-| Feature Tests | `tests/Feature/Media/ImageUploadServiceTest.php` with `Storage::fake()` — size and mime rejection, old-file cleanup on replace, collection path layout |
-| Documentation | New `docs/features/media-uploads.md` |
+| Controllers | ⏸ `Api/V1/MediaController@show` deferred to Phase 5 — see above. Public images are served from the public disk as absolute URLs, never proxied through PHP the way MealHub's `profile/image` route does. |
+| Services | ✅ `Media/ImageUploadService` — one service replacing MealHub's split `Cms/CmsImageService` + `Profile/ProfileImageService`, plus the net-new `Media/MediaPlacement` enum |
+| Repositories | — (this tier touches the filesystem, not the database) |
+| Models | ✅ the five `IMAGE_COLLECTION` constants are now honored by a writer |
+| FormRequests | ✅ `Concerns/ValidatesUploadedImage` — merges MealHub's near-duplicate `Cms/Concerns/ValidatesCmsImage` and `Profile/Concerns/ValidatesProfilePicture` |
+| Resources | ✅ `Concerns/ResolvesImageUrl` rebased onto `MediaPlacement` |
+| Policies / Routes / Notifications / Events | — |
+| Feature Tests | ✅ `tests/Feature/Media/ImageUploadServiceTest.php` (25 tests) with `Storage::fake()` |
+| Documentation | ✅ [features/media-uploads.md](features/media-uploads.md) |
 
-**Dependency:** `composer require intervention/image:3.11` (matching MealHub's pin). CLAUDE.md
-requires explicit approval for dependency changes — this is the phase to ask.
+**Dependency:** `intervention/image ^3.11` installed (3.11.8), matching MealHub's pin, with
+approval. It renders through `ImageManager::gd()` — Imagick is not installed on this PHP.
+
+**Three decisions worth keeping:**
+
+- **`MediaPlacement` is the single source of truth for the storage layout.** Disk, variant sizes
+  and path shape live on the enum, and *both* the writer (`ImageUploadService`) and the reader
+  (`ResolvesImageUrl`) build paths through `MediaPlacement::path()`. Phase 3 left the layout
+  restated in a trait comment that merely asked this phase to match it — that is exactly how a
+  reader and a writer quietly stop agreeing, so the constants were deleted rather than duplicated.
+  `ImageUploadServiceTest` closes the loop with a round-trip: store a file, resolve it as a
+  Resource would, assert the resolved path exists.
+- **Placement, not two services.** MealHub's two image services differed only in disk, path prefix
+  and how big "large" is — three values, which is an enum, not a second class. Where they had
+  drifted apart the better behavior won for both: personal images now preserve PNG/WebP
+  transparency instead of being forced to JPEG.
+- **Replacement is a `store()` argument, not a caller's responsibility.** `store(..., replacing:)`
+  deletes the outgoing file's variants *after* the new ones are written. Four future phases each
+  replace images; leaving cleanup to each call site means one of them forgets and orphans files
+  nothing can reach.
+
+**The enum lives in `app/Services/Media/`, not `app/Enums/`** — CLAUDE.md requires approval for new
+base folders and there is no `app/Enums` yet. Move it if that folder is ever introduced.
+
+**`php artisan storage:link` is now required for a working dev environment** — the symlink did not
+exist in this clone, and without it CMS images are written but every URL 404s.
 
 ---
 
@@ -384,7 +415,7 @@ requires explicit approval for dependency changes — this is the phase to ask.
 | FormRequests | `Profile/UpdateProfileRequest`, `Profile/UpdateProfilePictureRequest`. Drop MealHub's `UpdateProfileWithPictureRequest` — an API separates the two calls. |
 | Resources | Extend `UserResource`: avatar URL via the Phase 4 trait, nested country/county/city from Phase 2 |
 | Policies | — (self-scoped: always `$request->user()`, never an ID from the request) |
-| Routes | `GET v1/profile`, `PUT v1/profile`, `POST v1/profile/picture` — `auth:sanctum`, not role-gated |
+| Routes | `GET v1/profile`, `PUT v1/profile`, `POST v1/profile/picture` — `auth:sanctum`, not role-gated. **Plus Phase 4's deferred `GET v1/media/...`**: avatars are personal data on the private disk, so this phase is where the authenticated streaming controller is finally needed and must be built. |
 | Notifications / Events | — |
 | Feature Tests | `tests/Feature/Profile/` — update happy path, validation failure, picture upload and replace, 401 unauthenticated, and a test that user A cannot mutate user B |
 | Documentation | New `docs/features/profile.md` |
@@ -466,7 +497,7 @@ Introduce a `FRONTEND_URL` env value in this phase.
 | Models | ✅ `users.doc_image1` / `doc_image2` already migrated |
 | FormRequests | `Restaurant/SaveDocumentRequest` (port) |
 | Resources | `RestaurantDocumentResource` |
-| Policies | `RestaurantDocumentPolicy` — owner and admin only. These are **private** documents and must not sit on a public disk; this is the one case where Phase 4's authenticated streaming endpoint is required. |
+| Policies | `RestaurantDocumentPolicy` — owner and admin only. These are **private** documents and must not sit on a public disk — store them through `MediaPlacement::Personal` and serve them through the streaming endpoint Phase 5 builds. |
 | Routes | `v1/restaurant/documents*` (`role:restaurant`), `v1/admin/restaurants/{user}/documents/{slot}` (`role:admin`) |
 | Notifications | `RestaurantDocumentUpdatedNotification` → admin (port) |
 | Events | — |
@@ -589,7 +620,7 @@ No phase is complete until every box is ticked.
 
 | Package | Phase | Why |
 | --- | --- | --- |
-| `intervention/image` | 4 | Image resize and optimization |
+| `intervention/image` ✅ | 4 | Image resize and optimization — installed at 3.11.8 |
 | `stripe/stripe-php` | — | No payment routes exist in MealHub today |
 | `barryvdh/laravel-dompdf` | — | No PDF routes exist in MealHub today |
 | `laravel/socialite` | — | No social-login routes exist in MealHub today |

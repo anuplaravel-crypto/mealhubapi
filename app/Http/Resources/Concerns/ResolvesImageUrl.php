@@ -2,6 +2,8 @@
 
 namespace App\Http\Resources\Concerns;
 
+use App\Services\Media\ImageUploadService;
+use App\Services\Media\MediaPlacement;
 use Illuminate\Support\Facades\Storage;
 
 /**
@@ -20,27 +22,11 @@ use Illuminate\Support\Facades\Storage;
 trait ResolvesImageUrl
 {
     /**
-     * Disk holding CMS imagery. Public marketing assets on an anonymous page,
-     * so they are linked directly rather than streamed through a controller —
-     * the opposite of the private documents in Phase 9.
-     */
-    private const IMAGE_DISK = 'public';
-
-    /**
-     * Longest-edge variants the upload service writes per stored image.
+     * Disk, variants and path layout all come from {@see MediaPlacement::Cms} —
+     * the same enum {@see ImageUploadService} writes through. Restating them
+     * here is how a reader and a writer quietly stop agreeing on where a file
+     * is, so this trait deliberately owns none of them.
      *
-     * This is the storage-layout contract the models' `IMAGE_COLLECTION`
-     * constants complete: `cms/{collection}/{variant}/{filename}`. Phase 4's
-     * ImageUploadService must write to this same layout — nothing enforces it
-     * across the two classes but this comment.
-     *
-     * @var list<string>
-     */
-    private const IMAGE_VARIANTS = ['small', 'medium', 'large', 'original'];
-
-    private const DEFAULT_VARIANT = 'medium';
-
-    /**
      * Absolute URL of an uploaded file, falling back to the external link, or
      * null when the record has neither.
      *
@@ -51,17 +37,19 @@ trait ResolvesImageUrl
      * @param  string|null  $filename  the stored `image` / `avatar` / `logo` column
      * @param  string|null  $externalUrl  the `image_url` / `avatar_url` column
      */
-    protected function resolveImageUrl(string $collection, ?string $filename, ?string $externalUrl = null, string $variant = self::DEFAULT_VARIANT): ?string
+    protected function resolveImageUrl(string $collection, ?string $filename, ?string $externalUrl = null, ?string $variant = null): ?string
     {
         if ($filename === null || $filename === '') {
             return $externalUrl;
         }
 
-        $directory = in_array($variant, self::IMAGE_VARIANTS, true) ? $variant : self::DEFAULT_VARIANT;
+        $placement = MediaPlacement::Cms;
 
         // Absolute, from the disk's configured url — a relative path cannot
         // address the API host from a client served elsewhere, and would break
         // again the day these images move to S3 or a CDN.
-        return Storage::disk(self::IMAGE_DISK)->url("cms/{$collection}/{$directory}/{$filename}");
+        return Storage::disk($placement->disk())->url(
+            $placement->path($collection, $placement->resolveVariant($variant), $filename)
+        );
     }
 }
