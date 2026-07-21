@@ -199,14 +199,23 @@ MealHubApi is a Laravel REST API backend. The frontend is a **React SPA in a sep
 - **Database**: MySQL — **dedicated database**, `mealhubapi` (see `.env`: `DB_CONNECTION=mysql`, `DB_DATABASE=mealhubapi`). This is a separate database from the sibling [MealHub](../MealHub) Laravel app's `mealhub` database — the two apps no longer share a schema. MealHubApi owns and migrates its own full schema (`User`, and any other tables it needs) independently.
 - **Style**: PSR-12, enforced via Pint
 
-## Architecture: Thin Controllers, Fat Services
+## Architecture: Controller → Service → Repository
 
 Controllers must only: validate (via a Form Request), delegate to a service, and shape the response. No business logic, no direct multi-step Eloquent orchestration, no conditionals beyond simple guards in a controller method.
 
-The **authentication module is the established reference implementation** of this pattern — follow its structure for new domains (see `app/Http/Controllers/Api/V1/Auth/`, `app/Services/AuthService.php`, and [docs/controllers.md](docs/controllers.md)).
+| Tier | Does | Must not do |
+| --- | --- | --- |
+| Controller | validate → delegate → shape response | business logic, Eloquent |
+| Service | business rules, transactions, orchestrating repositories | direct `Model::query()` |
+| Repository | Eloquent queries only; returns models/collections | business rules, Request/Response objects, mail |
+
+⚠️ **The repository tier is a decision, not yet a reality.** `app/Repositories/` does not exist and `AuthService` still queries Eloquent directly. The tier was adopted to match the reference app [MealHub](../MealHub), whose own CLAUDE.md mandates `Controller → Service → Repository`; porting its 43 services is mechanical only if both sides have the same layering. Until Phase 0 of [docs/roadmap.md](docs/roadmap.md) lands, **`AuthService` is not a template for the repository split** — read the roadmap before adding a domain.
+
+The **authentication module is the established reference implementation** of the controller/service/Form Request/Resource split — follow its structure for new domains (see `app/Http/Controllers/Api/V1/Auth/`, `app/Services/AuthService.php`, and [docs/controllers.md](docs/controllers.md)).
 
 - `app/Http/Controllers/Api/{Version}/` — versioned API controllers. **Versioning has started at `V1`**; put new versioned controllers under `app/Http/Controllers/Api/V1/`, grouped in a sub-namespace by domain when a domain has several (e.g. `Api/V1/Auth/`). Share behavior across related controllers via an abstract base controller rather than copy-paste (see `Auth/BaseAuthController`).
 - `app/Services/` — business logic lives here, injected via constructor property promotion. `AuthService` is the current domain example; one service per domain concern. (`app/Services/Docs/` is a separate non-domain tooling engine behind `docs:generate` — see "Documentation" — not a template for domain services.)
+- `app/Repositories/` — **does not exist yet**; every Eloquent query per domain will live here, one class per model, behind an abstract `BaseRepository`. See the tier table above and Phase 0 of [docs/roadmap.md](docs/roadmap.md).
 - `app/Http/Requests/` — one Form Request per validated action, grouped by domain (e.g. `app/Http/Requests/Auth/`). Controllers must not call `$request->validate()` inline. `authorize()` returns `true` for public/pre-auth endpoints.
 - `app/Http/Resources/` — every API response that returns a model or collection goes through an Eloquent API Resource (`UserResource` is the current example). Controllers must not return raw models or arrays built ad hoc.
 - `app/Http/Traits/` — shared HTTP concerns (currently the `ApiResponse` envelope trait; see "Consistent JSON API Responses" below).
@@ -253,6 +262,8 @@ Use standard HTTP status codes (200/201/204, 401/403/404/422, 500) alongside the
 - Protect authenticated routes with the `auth:sanctum` middleware in `routes/api.php`.
 - Never log, echo, or return raw plaintext tokens outside of the initial issuance response.
 
+🔴 **There is no role authorization yet.** `auth:sanctum` proves only *that* a token is valid, not *whose role* it carries — so a customer's token can today call `POST /api/v1/admin/logout` (harmless: it revokes only the caller's own token, but it demonstrates the gap). MealHub enforced roles in `JwtAuthMiddleware`; that mechanism was never ported. **Do not add any admin- or role-scoped endpoint until a `role:` middleware exists** (Phase 1 of [docs/roadmap.md](docs/roadmap.md)) — role-scoping in `AuthService` covers credential lookup only, not request authorization.
+
 **Implemented and role-scoped.** The four roles (`customer`, `admin`, `restaurant`, `rider`) share one `users` table and each have their own registration/verify-otp/login/forgot-password/reset-password/logout endpoints under `/api/v1` (customer at the root; admin/restaurant/rider under a path prefix). `AuthService` scopes every lookup by role, so credentials for one role are never valid at another's endpoints. Registration and password reset are **OTP-based** (6-digit code emailed via `OtpNotification`), not link-based. Full behavior lives in [docs/features/authentication.md](docs/features/authentication.md) — reference it rather than restating the rules here.
 
 ## Domain Models Beyond Auth (schema only — no API surface yet)
@@ -273,7 +284,7 @@ These models came from the sibling [MealHub](../MealHub) Blade app. Three adapta
 - **No model resolves an image URL.** MealHub's models had `logoUrl` / `avatarSrc` / `imageSrc` accessors returning **root-relative** paths, which a cross-origin SPA cannot use. Models here expose raw `image` / `image_url` (and `logo`, `avatar` / `avatar_url`) columns only; resolving the pair into one absolute URL is the API Resource's job. The `IMAGE_COLLECTION` constants are kept as the storage-layout contract for the upload service that has not landed yet.
 - **No model returns CSS.** `accent`, `variant` and `perk_variant` ship as bare semantic tokens; MealHub's Bootstrap-class helpers (`accentClass`, `linkClass`, `perkClass`, `accentSoft`, `starIcons`) were dropped. Known debt in the other direction: the `icon_class` columns still hold Bootstrap Icons strings inherited from the seed data — treat them as opaque tokens to map, and expect a reseed to bare names ("shop") eventually.
 
-`tests/Feature/Database/SeederIntegrityTest.php` pins the seeded row counts and the rules above (stat-bar values digits-only, the About badge's newline, no source-wrapping in section bodies). `FactoryIntegrityTest.php` exercises every factory state. Note that both run on SQLite, which does **not** enforce varchar lengths — run `migrate:fresh --seed` against MySQL before trusting a new factory.
+`tests/Feature/Database/SeederIntegrityTest.php` pins the seeded row counts and the rules above (stat-bar values digits-only, the About badge's newline, no source-wrapping in section bodies). `FactoryIntegrityTest.php` exercises every factory state.
 
 See [docs/models.md](docs/models.md) (auto-generated) for the full field list.
 
@@ -281,15 +292,17 @@ See [docs/models.md](docs/models.md) (auto-generated) for the full field list.
 
 - Every API endpoint (each route + each meaningful outcome: happy path, validation failure, authorization failure, not-found) needs a Feature test under `tests/Feature/`. Follow the existing PHPUnit conventions in this file (already using `--phpunit` style tests per the Boost rules above).
 - Use model factories for all test data; add factory states instead of manually overriding attributes inline when a pattern repeats.
-- Do not consider a feature done until its tests exist and pass.
+- Do not consider a feature done until its tests exist and pass. The full **Definition of Done** (architecture, security, tests, docs) lives in [docs/roadmap.md](docs/roadmap.md) — it is the checklist, not this file.
+- `tests/Feature/Database/` runs on **SQLite**, which ignores varchar limits. Run `php artisan migrate:fresh --seed` against MySQL before trusting a new factory or migration.
 
 ## Documentation
 
-The `docs/` tree is the project's living documentation, rendered as a site with **MkDocs + Material** (`mkdocs.yml`, `requirements-docs.txt`; run `mkdocs serve` to preview). It has two kinds of files, maintained two different ways:
+The `docs/` tree is the project's living documentation, rendered as a site with **MkDocs + Material** (`mkdocs.yml`, `requirements-docs.txt`; run `mkdocs serve` to preview). New top-level pages must be added to `mkdocs.yml`'s `nav:` by hand — it is explicit, so an unlisted file is invisible on the site. It has three kinds of files, maintained three different ways:
 
 - **Auto-generated reference docs** — `docs/architecture.md`, `docs/controllers.md`, `docs/models.md`, `docs/routes.md`, and `docs/README.md` are produced by **`php artisan docs:generate`** (the `app/Services/Docs/` extractor/renderer engine), which runs automatically on every file edit via the PostToolUse hook. **Never hand-edit these** (they carry a "do not hand-edit" banner and would be overwritten) — if the content is wrong, fix the extractor/renderer in `app/Services/Docs/`. `docs:generate --check` fails if they're stale (for CI).
 - **Hand-written per-feature docs** (`docs/features/<feature>.md`) — one per domain concern, maintained by the `/project-docs` skill. For every feature, add/update: what it does and why, endpoints, request/response shape (reference the Form Request and Resource), and business rules/edge cases. These carry the intent the generator can't introspect.
-- A **`.githooks/pre-commit`** reminder warns (non-blocking) when code under `app/`, `routes/`, or `database/migrations/` is staged without any `docs/` change. Enable per-clone with `git config core.hooksPath .githooks`.
+- **[docs/roadmap.md](docs/roadmap.md)** — the MealHub → MealHubApi migration plan: what is already ported, the phase order, per-domain file checklists, and the **Definition of Done** every phase must satisfy. Hand-written, not owned by `/project-docs` or the generator. Consult it before starting a new domain; update it when a phase completes or the plan changes.
+- A **`.githooks/pre-commit`** reminder warns (non-blocking) when code under `app/`, `routes/`, or `database/migrations/` is staged without any **`docs/features/`** change. It deliberately ignores the auto-generated reference docs — the PostToolUse hook regenerates those on every edit, so counting them would silence the reminder permanently. Enable per-clone with `git config core.hooksPath .githooks`.
 
 ## Don't Duplicate Code
 

@@ -1,0 +1,482 @@
+# Migration Roadmap — MealHub → MealHubApi
+
+Hand-written planning document. **Not** auto-generated — `php artisan docs:generate` does not
+touch this file.
+
+How to port the Blade app [MealHub](../../MealHub) into this API, domain by domain, ordered so
+that every increment leaves the API in a working, tested state.
+
+Baseline inventory taken 2026-07-21 — MealHub: 143 web routes, 33 controllers, 43 services,
+17 repositories, 16 models. MealHubApi: 6 auth controllers, 1 service, 16 models, 31 routes.
+
+---
+
+## What is already done
+
+The port is further along than a `composer.json` diff suggests. **The entire data layer is
+finished**; the work that remains is the HTTP layer.
+
+| Layer | MealHub | MealHubApi | Status |
+| --- | --- | --- | --- |
+| Migrations | 21 | 20 | ✅ Complete — `users` verified column-for-column identical; API adds `personal_access_tokens` and `rememberToken`, drops nothing |
+| Models | 16 | 16 | ✅ Complete — including the three SPA adaptations recorded in CLAUDE.md |
+| Seeders | 9 | 10 | ✅ Complete (plus `DevUserSeeder`) |
+| Factories | 1 | 11 | ✅ Ahead of MealHub |
+| Auth endpoints | 4 roles | 4 roles | 🟡 ~80% — gaps listed in Phase 1 |
+| Everything else | 33 controllers | 6 | ❌ This roadmap |
+
+Consequently almost every phase below has **Migrations / Models / Factories / Seeders = done**.
+Exceptions are called out explicitly.
+
+---
+
+## Architecture decisions
+
+### Three-tier: Controller → Service → Repository
+
+MealHubApi originally shipped a two-tier architecture (thin controller → fat service, no
+repository layer). **That decision has been reversed**: the repository layer is kept, to stay
+consistent with the reference project and make porting mechanical rather than interpretive.
+
+MealHub's CLAUDE.md mandates `Controller → Service → Repository`; MealHubApi's did not mention
+repositories at all. Phase 0 amends MealHubApi's CLAUDE.md so the two agree — without that edit
+a future session will "helpfully" collapse the layer back into services.
+
+| Tier | Does | Must not do |
+| --- | --- | --- |
+| Controller | validate (Form Request) → delegate → shape response | business logic, Eloquent |
+| Service | business rules, transactions, orchestrating several repositories | direct `Model::query()` |
+| Repository | Eloquent queries only | business rules, Request/Response objects, mail |
+
+Repositories return models and collections — never arrays, never DTOs.
+
+### Role authorization does not exist yet 🔴
+
+`BaseAuthController::logout()` calls `$request->user()` behind `auth:sanctum` alone. **A
+customer's token can currently call `/api/v1/admin/logout`.** Harmless today (it revokes only
+the caller's own token), but it proves there is no role gate: MealHub enforced roles in
+`JwtAuthMiddleware`, and that mechanism was never ported.
+
+The moment Phase 10 or 11 lands, this becomes "any logged-in customer can edit the home page".
+**Phase 1 must close it before any role-scoped endpoint ships.**
+
+---
+
+## Phase order
+
+```
+0. Foundations
+   │
+1. Auth hardening ──┬─→ 2. Geo reference (public)
+                    ├─→ 3. Public Home CMS (public, read-only)
+                    └─→ 4. Media foundation ──┬─→ 5. Profile
+                                              ├─→ 8. Rider vehicle
+                                              ├─→ 9. Restaurant documents
+                                              └─→ 10. Admin CMS write
+                         6. Notifications ────┴─→ 11. Admin user mgmt ─→ 12. Dashboards
+                         7. Newsletter
+                        13. Terms & conditions (net-new, backlog)
+```
+
+---
+
+## Phase 0 — Foundations
+
+No endpoints, so the API stays green by definition. Passing condition: the existing auth tests
+still pass.
+
+### 0.1 Repository layer
+
+New base folder `app/Repositories/`, mirroring MealHub's structure:
+
+```
+app/Repositories/
+├── BaseRepository.php
+├── Cms/{FeaturedRestaurant,HomeSection,HomeStat,MealCategory,
+│        NavMenu,SectionFeature,SiteSetting,Testimonial}Repository.php
+├── CustomerRepository.php              ├── LocationRepository.php
+├── NewsletterSubscriberRepository.php  ├── NotificationRepository.php
+├── PasswordResetRepository.php         ├── RestaurantRepository.php
+├── RiderRepository.php                 ├── RiderVehicleRepository.php
+└── UserRepository.php
+```
+
+One deliberate improvement over MealHub: MealHub has no `BaseRepository`, so
+`findOrFail/create/update/delete` is copy-pasted across all 17 classes. Introduce an abstract
+`BaseRepository` here — concrete classes then declare only their model and their genuinely
+specific queries (`published()`, `nextSortOrder()`).
+
+**Build in Phase 0:** `BaseRepository`, `UserRepository`, `PasswordResetRepository` (Phase 1
+depends on them). The rest arrive with their domain — see the table below.
+
+| Repository | Phase |
+| --- | --- |
+| `UserRepository`, `PasswordResetRepository` | 0 → 1 |
+| `LocationRepository` | 2 |
+| `Cms/*` (8 classes) | 3 (read) → 10 (write) |
+| `NotificationRepository` | 6 |
+| `NewsletterSubscriberRepository` | 7 |
+| `RiderVehicleRepository` | 8 |
+| `CustomerRepository`, `RestaurantRepository`, `RiderRepository` | 11 |
+
+### 0.2 Standard API response format
+
+Already implemented: `App\Http\Traits\ApiResponse` — `successResponse()` / `errorResponse()`
+producing `{success, data, message}` and `{success, message, errors}`.
+
+Three gaps to close before Phase 6 introduces the first paginated list:
+
+1. **No pagination support.** Passing a paginator to `successResponse()` nests Laravel's own
+   `{data, links, meta}` inside `data`, so the client sees `data.data.data`. Add
+   `paginatedResponse()` that lifts `meta` to the envelope's top level.
+2. **No 204 path** — the delete endpoints in Phases 7 and 10 need one.
+3. **`errorResponse()` defaults to 422**, but most manual errors are 400/403/404. A forgotten
+   status argument silently returns the wrong code. Make the status explicit.
+
+Document the envelope and pagination shape in `docs/features/api-conventions.md` — that file is
+the contract MealHubReact codes against.
+
+### 0.3 Global exception handling
+
+Already implemented: `bootstrap/app.php` `withExceptions` → `shouldRenderJsonWhen` + `respond`,
+reshaping every `api/*` error into the project envelope.
+
+Gaps found:
+
+1. 🔴 **`ModelNotFoundException` leaks the internal class name.** A failed route-model binding
+   returns `No query results for model [App\Models\User] 5`. Phase 2 introduces the first bound
+   parameter, so this surfaces immediately. Map it to `Resource not found.` + 404.
+2. **429 is unshaped.** Auth routes already carry `throttle:6,1` but `ThrottleRequestsException`
+   has no envelope handling; lift `Retry-After` into the body so the client can show a countdown.
+3. **`AuthorizationException` → 403** messaging, settled before Phase 6 adds the first Policy.
+4. **No base for domain errors.** Add `App\Exceptions\DomainException` carrying a status and
+   message, mapped in the handler, so services stop reaching for `abort()` or raw
+   `ValidationException`.
+5. **Pin the production 500 shape** with a test asserting no stack trace escapes when
+   `APP_DEBUG=false`.
+
+### 0.4 CLAUDE.md amendments
+
+- Replace the two-tier architecture description with the three-tier contract above.
+- Add the Definition of Done below as its own section, so it is enforced every session.
+
+### 0.5 Phase 0 tests
+
+- `tests/Feature/Api/ResponseEnvelopeTest.php` — success, error, paginated, 204 shapes
+- `tests/Feature/Api/ExceptionEnvelopeTest.php` — one assertion per status: 401, 403, 404, 422,
+  429, 500
+
+---
+
+## Phase 1 — Auth hardening & role gate
+
+Everything later sits behind this, and it closes the authorization hole.
+
+| Category | Work |
+| --- | --- |
+| Controllers | Extend `Api/V1/Auth/BaseAuthController` with `resendOtp()`, `changePassword()`. New `Api/V1/Auth/MobileOtpController` (ports `Frontend\AuthController@sendMobileOtp` / `verifyMobileOtp`). |
+| Services | Extend `AuthService`. Do **not** add per-role services — MealHub's four `Auth/*AuthService` classes are already correctly collapsed into one role-parameterized service. |
+| Repositories | `UserRepository`, `PasswordResetRepository` (from Phase 0) wired into `AuthService` |
+| Models | ✅ `User` |
+| FormRequests | `Auth/ChangePasswordRequest`, `Auth/ResendOtpRequest`, `Auth/SendMobileOtpRequest`, `Auth/VerifyMobileOtpRequest` (all exist in MealHub) |
+| Resources | ✅ `UserResource` |
+| Policies | — |
+| Routes | Four additions to the `$registerAuthRoutes` closure in `routes/api.php`; apply the new role middleware to `logout` |
+| Notifications | ✅ `OtpNotification`. Port `{Customer,Restaurant,Rider}VerifyAccountNotification` as **one** role-parameterized class, mirroring the `OtpNotification` consolidation. |
+| Events | — |
+| Seeders / Factories | ✅ |
+| Feature Tests | Extend `tests/Feature/Auth/`. New: `ChangePasswordTest`, `ResendOtpTest`, `MobileOtpTest`, and `RoleGateTest` asserting a customer token gets 403 on an admin-prefixed route. |
+| Documentation | Update `docs/features/authentication.md` |
+
+**Key artifact:** `app/Http/Middleware/EnsureUserHasRole.php`, aliased in `bootstrap/app.php` as
+`role:admin` etc. The alternative — Sanctum token abilities issued at login — is rejected: a
+token minted before a role change would keep the old ability, and route files read worse.
+
+---
+
+## Phase 2 — Geo reference data (public, read-only)
+
+Zero dependencies, and MealHubReact's registration form is blocked without it.
+
+| Category | Work |
+| --- | --- |
+| Controllers | `Api/V1/LocationController` — `countries()`, `counties()`, `cities()` (ports `Frontend\PagesController`; do not carry over its `getCiiesByCounty` typo) |
+| Services | `LocationService` (port) |
+| Repositories | `LocationRepository` (port) |
+| Models | ✅ `Country`, `County`, `City` |
+| FormRequests | — (bound path parameters only) |
+| Resources | `CountryResource`, `CountyResource`, `CityResource` |
+| Policies / Notifications / Events | — |
+| Routes | `GET v1/countries`, `v1/countries/{country}/counties`, `v1/counties/{county}/cities` — public. Prefer nested REST paths over MealHub's flat `cities/{countyId}`. |
+| Seeders / Factories | ✅ `LocationSeeder` (3 countries / 8 counties / 24 cities) |
+| Feature Tests | `tests/Feature/Location/LocationTest.php` — happy path, empty child list, 404 on unknown parent |
+| Documentation | New `docs/features/locations.md` |
+
+---
+
+## Phase 3 — Public Home CMS (read-only)
+
+Unblocks the entire React public site with no auth and no uploads — the highest value per unit
+of work in the roadmap.
+
+| Category | Work |
+| --- | --- |
+| Controllers | `Api/V1/HomeController@index` — one endpoint returning the whole home payload |
+| Services | `Cms/HomePageService` (port; it already aggregates all eight CMS models) |
+| Repositories | `Cms/*Repository` × 8 (port, read methods only) |
+| Models | ✅ all 8 |
+| FormRequests | — |
+| Resources | The critical deliverable. `SiteSettingResource`, `NavMenuResource`, `HomeStatResource`, `HomeSectionResource` (nesting `SectionFeatureResource`), `MealCategoryResource`, `FeaturedRestaurantResource`, `TestimonialResource`. Per CLAUDE.md, resolving `image` + `image_url` into one absolute URL is the **Resource's** job — models deliberately do not. Build a shared `Concerns/ResolvesImageUrl` trait here; Phases 5, 8, 9, 10 reuse it. |
+| Policies / Notifications / Events | — |
+| Routes | `GET v1/home` — public. Add per-resource public reads only if React genuinely needs them separately. |
+| Seeders / Factories | ✅ |
+| Feature Tests | `tests/Feature/Cms/PublicHomeTest.php` — full payload shape, unpublished rows excluded, sort order respected, image URLs absolute. Port assertions from MealHub's `HomePageCmsTest`. |
+| Documentation | New `docs/features/home-cms.md` |
+
+---
+
+## Phase 4 — Media / upload foundation
+
+An enabler with few endpoints of its own. Phases 5, 8, 9 and 10 all need it; building it four
+times is the main duplication risk in this migration.
+
+| Category | Work |
+| --- | --- |
+| Controllers | `Api/V1/MediaController@show` **only** for private files (restaurant documents, Phase 9). Public images should be served from a public disk as absolute URLs — a cross-origin SPA should not proxy every avatar through PHP, which is what MealHub's `profile/image` route does. |
+| Services | `Media/ImageUploadService` — one service replacing MealHub's split `Cms/CmsImageService` + `Profile/ProfileImageService`. Honors each model's existing `IMAGE_COLLECTION` constant (already ported as the storage-layout contract). |
+| Repositories | — |
+| FormRequests | `Concerns/ValidatesUploadedImage` — merge MealHub's near-duplicate `Cms/Concerns/ValidatesCmsImage` and `Profile/Concerns/ValidatesProfilePicture` |
+| Resources | `Concerns/ResolvesImageUrl` (from Phase 3) |
+| Policies / Routes / Notifications / Events | minimal |
+| Feature Tests | `tests/Feature/Media/ImageUploadServiceTest.php` with `Storage::fake()` — size and mime rejection, old-file cleanup on replace, collection path layout |
+| Documentation | New `docs/features/media-uploads.md` |
+
+**Dependency:** `composer require intervention/image:3.11` (matching MealHub's pin). CLAUDE.md
+requires explicit approval for dependency changes — this is the phase to ask.
+
+---
+
+## Phase 5 — Profile (all four roles)
+
+| Category | Work |
+| --- | --- |
+| Controllers | `Api/V1/ProfileController` — one controller, role read from the token, replacing MealHub's four near-identical `ProfileController`s |
+| Services | `ProfileService`. Compare MealHub's four role-specific profile services first; if real differences exist keep them as private methods, not four classes. |
+| Repositories | `UserRepository` (extend) |
+| Models | ✅ `User` |
+| FormRequests | `Profile/UpdateProfileRequest`, `Profile/UpdateProfilePictureRequest`. Drop MealHub's `UpdateProfileWithPictureRequest` — an API separates the two calls. |
+| Resources | Extend `UserResource`: avatar URL via the Phase 4 trait, nested country/county/city from Phase 2 |
+| Policies | — (self-scoped: always `$request->user()`, never an ID from the request) |
+| Routes | `GET v1/profile`, `PUT v1/profile`, `POST v1/profile/picture` — `auth:sanctum`, not role-gated |
+| Notifications / Events | — |
+| Feature Tests | `tests/Feature/Profile/` — update happy path, validation failure, picture upload and replace, 401 unauthenticated, and a test that user A cannot mutate user B |
+| Documentation | New `docs/features/profile.md` |
+
+---
+
+## Phase 6 — Notifications
+
+| Category | Work |
+| --- | --- |
+| Controllers | `Api/V1/NotificationController` — `index`, `unread`, `markAsRead`, `markAllAsRead`, `toggleRead`, `destroy`. One controller replaces MealHub's four identical per-role ones (24 routes → 6). |
+| Services | `NotificationService` (port, merging `Admin/AdminNotificationService` and `Customer/CustomerNotificationService`) |
+| Repositories | `NotificationRepository` (port) |
+| Models | ✅ `notifications` migration ported; uses Laravel's `DatabaseNotification`, no custom model |
+| FormRequests | — |
+| Resources | `NotificationResource` plus a paginated collection — settle the pagination envelope here (Phase 0.2), it recurs through Phases 10–12 |
+| Policies | `NotificationPolicy` — owner-only. The first real policy in the codebase; `{id}` comes from the URL, so ownership must be enforced. |
+| Routes | `v1/notifications/*` under `auth:sanctum` |
+| Notifications | Port and consolidate: `{Customer,Restaurant,Rider}RegistrationNotification` → one role-parameterized class; same for `AccountStatusNotification`. Keep the `FormatsUserDetails` trait. |
+| Events | Recommended (net-new): `UserStatusChanged` + listener, decoupling Phase 11's toggle from mail sending |
+| Feature Tests | `tests/Feature/Notifications/` — list and unread counts, mark-read idempotency, 403 on another user's notification, pagination |
+| Documentation | New `docs/features/notifications.md` |
+
+---
+
+## Phase 7 — Newsletter
+
+| Category | Work |
+| --- | --- |
+| Controllers | `Api/V1/NewsletterController` — `subscribe` (public), `confirm(token)`, `unsubscribe(token)`; `Api/V1/Admin/NewsletterController` — `index`, `destroy` |
+| Services | `Newsletter/NewsletterService` (port) |
+| Repositories | `NewsletterSubscriberRepository` (port) |
+| Models | ✅ `NewsletterSubscriber` — double opt-in, with `status` / `is_mailable` derived from the two timestamps and never stored. Preserve this. |
+| FormRequests | `Newsletter/SubscribeRequest` (port) |
+| Resources | `NewsletterSubscriberResource` |
+| Policies | — (admin routes use the Phase 1 `role:admin` middleware) |
+| Routes | `POST v1/newsletter/subscribe` (public, throttled), `GET v1/newsletter/confirm/{token}`, `GET v1/newsletter/unsubscribe/{token}`, `v1/admin/newsletter*` |
+| Notifications | `NewsletterConfirmationNotification` (port) |
+| Events | — |
+| Feature Tests | `tests/Feature/Newsletter/` — subscribe, duplicate email, confirm with valid/invalid/expired token, unsubscribe, admin list and delete. Port MealHub's `NewsletterSubscriptionTest`. |
+| Documentation | New `docs/features/newsletter.md` |
+
+**SPA constraint:** confirm and unsubscribe links land in an email. They must point at the React
+app, which then calls the API — pointing them at the API directly shows the user raw JSON.
+Introduce a `FRONTEND_URL` env value in this phase.
+
+---
+
+## Phase 8 — Rider vehicle
+
+| Category | Work |
+| --- | --- |
+| Controllers | `Api/V1/Rider/VehicleController` — `show`, `save` (port) |
+| Services | `Rider/RiderVehicleService` (port) |
+| Repositories | `RiderVehicleRepository` (port) |
+| Models | ✅ `RiderVehicle`; `User::vehicles()` relation already added |
+| FormRequests | `Rider/SaveVehicleRequest` (port) |
+| Resources | `RiderVehicleResource` (Phase 4 image trait) |
+| Policies | `RiderVehiclePolicy` — rider owns their vehicle; admin may read any |
+| Routes | `v1/rider/vehicle` under `auth:sanctum` + `role:rider` |
+| Notifications | `RiderVehicleUpdatedNotification` → admin (port) |
+| Events | — |
+| Seeders / Factories | ✅ `RiderVehicleFactory` |
+| Feature Tests | `tests/Feature/Rider/VehicleTest.php` — port `RiderVehicleFlowTest`, add role-gate and cross-rider 403 |
+| Documentation | New `docs/features/rider-onboarding.md` |
+
+**Business rule to preserve:** `is_active` tracks `users.status`, flipped by an admin on approval
+(Phase 11) — never by the rider.
+
+---
+
+## Phase 9 — Restaurant documents
+
+| Category | Work |
+| --- | --- |
+| Controllers | `Api/V1/Restaurant/DocumentController` — `save`, `show(slot)` (port) |
+| Services | `Restaurant/RestaurantDocumentService` (port) |
+| Repositories | `RestaurantRepository` (partial, completed in Phase 11) |
+| Models | ✅ `users.doc_image1` / `doc_image2` already migrated |
+| FormRequests | `Restaurant/SaveDocumentRequest` (port) |
+| Resources | `RestaurantDocumentResource` |
+| Policies | `RestaurantDocumentPolicy` — owner and admin only. These are **private** documents and must not sit on a public disk; this is the one case where Phase 4's authenticated streaming endpoint is required. |
+| Routes | `v1/restaurant/documents*` (`role:restaurant`), `v1/admin/restaurants/{user}/documents/{slot}` (`role:admin`) |
+| Notifications | `RestaurantDocumentUpdatedNotification` → admin (port) |
+| Events | — |
+| Feature Tests | `tests/Feature/Restaurant/DocumentTest.php` — port `RestaurantDocumentTest`, add 403 for another restaurant and 401 unauthenticated |
+| Documentation | New `docs/features/restaurant-documents.md` |
+
+---
+
+## Phase 10 — Admin CMS write
+
+The largest phase: 8 resources × (index, store, update, destroy, toggle) ≈ 36 endpoints.
+
+| Category | Work |
+| --- | --- |
+| Controllers | `Api/V1/Admin/Cms/{SiteSetting,NavMenu,HomeStat,HomeSection,SectionFeature,MealCategory,FeaturedRestaurant,Testimonial}Controller`. Use an abstract `BaseCmsController` for the shared index/store/update/destroy/toggle shape — the same technique as `BaseAuthController`. |
+| Services | Eight `Cms/*Service` classes (port). `HomeSectionService` and `SiteSettingService` are the non-uniform ones — read them before assuming the base pattern fits. |
+| Repositories | `Cms/*Repository` × 8 — extend the Phase 3 read-only versions with write methods |
+| Models | ✅ |
+| FormRequests | Port all eight `Cms/Save*Request` / `Update*Request`, rebased on Phase 4's shared image trait |
+| Resources | Reuse Phase 3's. Do not write admin variants unless they genuinely expose different fields. |
+| Policies | — (`role:admin` suffices; CMS records have no per-record ownership) |
+| Routes | `v1/admin/cms/*` under `auth:sanctum` + `role:admin`. Use real REST verbs — MealHub's `POST .../{id}/delete` is a Blade-form workaround, not a design choice. |
+| Notifications / Events | — |
+| Feature Tests | `tests/Feature/Cms/Admin*Test.php` — port MealHub's eight admin CMS tests. Each needs happy path, validation failure, 403 for non-admin, 404, and a toggle round-trip. |
+| Documentation | Extend `docs/features/home-cms.md` with the admin surface |
+
+**Suggested split:** ship `SiteSetting` and `Testimonial` first as pattern-setters, review, then
+batch the remaining six.
+
+---
+
+## Phase 11 — Admin user management
+
+| Category | Work |
+| --- | --- |
+| Controllers | `Api/V1/Admin/{Customer,Restaurant,Rider}Controller` — `index`, `show`, `toggleStatus` (port) |
+| Services | Port MealHub's three management services; evaluate collapsing them into one `UserManagementService` scoped by role, on the same argument as `AuthService` |
+| Repositories | `CustomerRepository`, `RestaurantRepository`, `RiderRepository` (port) |
+| Models | ✅ `User` |
+| FormRequests | `Admin/ListUsersRequest` (net-new: filter, sort, paginate parameters) |
+| Resources | `AdminUserResource` — genuinely different from `UserResource`: exposes status, documents, vehicle, verification state |
+| Policies | — (`role:admin`) |
+| Routes | `v1/admin/{customers,restaurants,riders}` plus `{user}/toggle-status` |
+| Notifications | `AccountStatusNotification` (consolidated in Phase 6) fires on toggle |
+| Events | `UserStatusChanged` (Phase 6) — toggling a rider's status must also flip `RiderVehicle.is_active` |
+| Feature Tests | Port `AdminCustomerManagementTest` and `AdminRestaurantManagementTest`, add the rider equivalent. Assert the notification dispatch and the rider-vehicle side effect. |
+| Documentation | New `docs/features/admin-user-management.md` |
+
+---
+
+## Phase 12 — Dashboards
+
+Last, because every widget reads data the earlier phases create.
+
+| Category | Work |
+| --- | --- |
+| Controllers | `Api/V1/DashboardController@index` — role-switched payload, replacing MealHub's four dashboard controllers |
+| Services | Keep all four of MealHub's dashboard services — these genuinely differ per role |
+| Repositories | Reuse the aggregate queries from earlier phases' repositories |
+| Models | ✅ |
+| FormRequests | — |
+| Resources | One `DashboardResource` per role, or one with role-conditional sections |
+| Policies | — |
+| Routes | `GET v1/dashboard` — `auth:sanctum`, payload determined by the token's role |
+| Notifications / Events | — |
+| Feature Tests | `tests/Feature/Dashboard/` — one per role, asserting counts against seeded and factory data, **plus a query-count assertion** |
+| Documentation | New `docs/features/dashboards.md` |
+
+Dashboards are the classic N+1 offender. Assert query counts rather than trusting review.
+
+---
+
+## Phase 13 — Terms & conditions (net-new, backlog)
+
+`TermCondition`, `TermConditionUser`, their migrations and `scopeActiveForRole()` are ported, but
+**MealHub has no T&C endpoints** — registration only sets the `accept_registration_tnc` boolean.
+So this is new construction, not a port: a public "active terms for role" read, acceptance
+recording (`accepted_at`, `ip_address`), and admin versioning CRUD. Nothing blocks it; schedule
+it when the product needs it.
+
+---
+
+## Definition of Done
+
+No phase is complete until every box is ticked.
+
+**Architecture**
+
+- [ ] Controllers contain no business logic — validate, delegate, respond
+- [ ] Services contain no direct `Model::query()` — all access via repositories
+- [ ] Repositories contain no business rules
+- [ ] Every validated action has its own Form Request (no inline `$request->validate()`)
+- [ ] Every model or collection response passes through an API Resource
+- [ ] Existing services, scopes and traits were searched before writing new ones
+
+**Security**
+
+- [ ] Every route carries the correct middleware (`auth:sanctum` plus `role:*` where applicable)
+- [ ] Ownership is verified by a Policy wherever an ID arrives from the URL
+- [ ] A test asserts 403 for a token of the wrong role
+
+**Tests**
+
+- [ ] Each endpoint covers happy path, validation failure, auth failure, and not-found
+- [ ] `php artisan test --compact` is green
+- [ ] Test data comes from factories, not inline attribute overrides
+- [ ] `php artisan migrate:fresh --seed` run against **MySQL** — SQLite ignores varchar limits
+
+**Quality and documentation**
+
+- [ ] `vendor/bin/pint --dirty --format agent`
+- [ ] `docs/features/<name>.md` created or updated (`/project-docs`)
+- [ ] `php artisan docs:generate --check` passes
+- [ ] No N+1 — query counts asserted on list and dashboard endpoints
+- [ ] One phase, one commit (`/commit-push`)
+
+---
+
+## Dependencies, added just in time
+
+| Package | Phase | Why |
+| --- | --- | --- |
+| `intervention/image` | 4 | Image resize and optimization |
+| `stripe/stripe-php` | — | No payment routes exist in MealHub today |
+| `barryvdh/laravel-dompdf` | — | No PDF routes exist in MealHub today |
+| `laravel/socialite` | — | No social-login routes exist in MealHub today |
+| `firebase/php-jwt` | never | Sanctum replaces it; do not reintroduce JWT |
+
+Three of MealHub's five extra packages back **no current routes** — they are installed for
+planned work. Do not port them on the assumption they are in use.
