@@ -12,6 +12,7 @@ use App\Http\Controllers\Api\V1\Auth\AdminAuthController;
 use App\Http\Controllers\Api\V1\Auth\CustomerAuthController;
 use App\Http\Controllers\Api\V1\Auth\RestaurantAuthController;
 use App\Http\Controllers\Api\V1\Auth\RiderAuthController;
+use App\Http\Controllers\Api\V1\DashboardController;
 use App\Http\Controllers\Api\V1\HomeController;
 use App\Http\Controllers\Api\V1\LocationController;
 use App\Http\Controllers\Api\V1\MediaController;
@@ -116,6 +117,26 @@ Route::prefix('v1')->name('api.v1.')->group(function () use ($registerAuthRoutes
     |
     */
     Route::get('home', [HomeController::class, 'index'])->name('home');
+
+    /*
+    |----------------------------------------------------------------------
+    | Dashboard (every role)
+    |----------------------------------------------------------------------
+    |
+    | One route, four payloads: the token's role decides which section is
+    | merged in. Not role-gated, on the same terms as the profile routes
+    | below — every role has a dashboard, and a gate listing all four would
+    | gate nothing. It takes no id and reads nothing but the caller's own
+    | account, so there is no Policy to write.
+    |
+    | Deliberately *not* a second profile endpoint: an identity block, an
+    | unread badge, and the role's onboarding gate. Address and location
+    | stay at v1/profile, so a field added there is added in one place.
+    |
+    */
+    Route::middleware('auth:sanctum')
+        ->get('dashboard', [DashboardController::class, 'index'])
+        ->name('dashboard');
 
     /*
     |----------------------------------------------------------------------

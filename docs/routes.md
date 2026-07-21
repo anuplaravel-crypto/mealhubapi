@@ -79,6 +79,7 @@ Every application route is defined in `routes/api.php` and auto-prefixed with `/
 | GET | `/api/v1/counties/{county}/cities` | api.v1.counties.cities.index | LocationController@cities | api |
 | GET | `/api/v1/countries` | api.v1.countries.index | LocationController@countries | api |
 | GET | `/api/v1/countries/{country}/counties` | api.v1.countries.counties.index | LocationController@counties | api |
+| GET | `/api/v1/dashboard` | api.v1.dashboard | DashboardController@index | api, auth:sanctum |
 | POST | `/api/v1/forgot-password` | api.v1.customer.forgot-password | CustomerAuthController@forgotPassword | api, throttle:6,1 |
 | GET | `/api/v1/home` | api.v1.home | HomeController@index | api |
 | POST | `/api/v1/login` | api.v1.customer.login | CustomerAuthController@login | api, throttle:6,1 |

@@ -3,10 +3,12 @@
 namespace App\Repositories;
 
 use App\Models\User;
+use App\Services\DashboardService;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
+use Illuminate\Support\Collection as SupportCollection;
 
 /**
  * @extends BaseRepository<User>
@@ -117,6 +119,38 @@ class UserRepository extends BaseRepository
     private function likePattern(string $search): string
     {
         return '%'.addcslashes($search, '%_\\').'%';
+    }
+
+    /**
+     * Account tallies for the given roles, keyed by role — one row per role
+     * that has any accounts, carrying `total` and `active`.
+     *
+     * **One query for every role, not one per role.** A dashboard that counted
+     * each tile separately would issue three round trips to answer what
+     * `GROUP BY role` answers in one, and that count would grow with every role
+     * added. `SUM(CASE WHEN ...)` rather than a second grouped query because
+     * `status` is the only split, and MySQL and SQLite agree on the expression.
+     *
+     * `toBase()` because these are aggregates, not accounts: hydrating a `User`
+     * per row would produce three model instances whose only real attribute is
+     * `role`, and a caller could mistake one for an account.
+     *
+     * A role with no accounts is simply absent — filling the gap with a zero is
+     * presentation, and belongs to the caller that knows which tiles it renders.
+     * See {@see DashboardService::userCounts()}.
+     *
+     * @param  list<string>  $roles
+     * @return SupportCollection<string, object{role: string, total: int, active: int}>
+     */
+    public function countsByRole(array $roles): SupportCollection
+    {
+        return $this->query()
+            ->toBase()
+            ->whereIn('role', $roles)
+            ->groupBy('role')
+            ->selectRaw('role, COUNT(*) as total, SUM(CASE WHEN status = 1 THEN 1 ELSE 0 END) as active')
+            ->get()
+            ->keyBy('role');
     }
 
     /**

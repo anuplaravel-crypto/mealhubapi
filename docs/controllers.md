@@ -769,3 +769,14 @@ Stream one document belonging to the named restaurant.
 
 
 ---
+
+## \Api\V1\DashboardController
+
+**File:** `/app/Http/Controllers/Api/V1/DashboardController.php`
+
+### `index(Request $request): JsonResponse`
+
+The caller's own dashboard, shaped by the role their token carries.
+
+
+---

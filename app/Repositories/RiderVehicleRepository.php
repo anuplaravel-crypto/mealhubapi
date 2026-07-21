@@ -25,14 +25,25 @@ class RiderVehicleRepository extends BaseRepository
     /**
      * The rider's vehicle, or null before they have registered one.
      *
-     * `latest()` guards the shape rather than relying on it: the relation is a
+     * The ordering guards the shape rather than relying on it: the relation is a
      * `hasMany` and the table has no unique index on `rider_id` alone, so a row
      * inserted outside {@see self::updateOrCreateForRider()} could make a second
      * one exist. Newest wins in that case rather than an arbitrary row.
+     *
+     * **The tie-break on `id` is what makes "newest" mean anything.** `latest()`
+     * alone orders by `created_at`, whose resolution is one second — two rows
+     * written in the same second leave the winner to whatever order the engine
+     * happens to return, which is not a guarantee at all. The same tie-break
+     * `paginateByRole()` applies for the same reason, and it also brings this
+     * into line with `AdminUserResource::vehicle()`, which picks the highest id
+     * off the eager-loaded relation.
      */
     public function forRider(User $rider): ?RiderVehicle
     {
-        return $rider->vehicles()->latest()->first();
+        return $rider->vehicles()
+            ->orderByDesc('created_at')
+            ->orderByDesc('id')
+            ->first();
     }
 
     /**

@@ -739,25 +739,50 @@ Phase 8's derived `RiderVehicle.is_active` a writer. `php artisan test --compact
 
 ---
 
-## Phase 12 — Dashboards
+## Phase 12 — Dashboards ✅ Complete
 
 Last, because every widget reads data the earlier phases create.
+`php artisan test --compact`: 474 passed.
 
 | Category | Work |
 | --- | --- |
-| Controllers | `Api/V1/DashboardController@index` — role-switched payload, replacing MealHub's four dashboard controllers |
-| Services | Keep all four of MealHub's dashboard services — these genuinely differ per role |
-| Repositories | Reuse the aggregate queries from earlier phases' repositories |
+| Controllers | ✅ `Api/V1/DashboardController@index` — role-switched payload, replacing MealHub's four dashboard controllers |
+| Services | ✅ **One** `DashboardService`, not four. See below — this reverses what this row used to say. |
+| Repositories | ✅ Reused `NotificationRepository` and `RiderVehicleRepository` as-is; `UserRepository` gained `countsByRole()`, the phase's one new query |
 | Models | ✅ |
-| FormRequests | — |
-| Resources | One `DashboardResource` per role, or one with role-conditional sections |
-| Policies | — |
-| Routes | `GET v1/dashboard` — `auth:sanctum`, payload determined by the token's role |
-| Notifications / Events | — |
-| Feature Tests | `tests/Feature/Dashboard/` — one per role, asserting counts against seeded and factory data, **plus a query-count assertion** |
-| Documentation | New `docs/features/dashboards.md` |
+| FormRequests | ✅ — none. The route takes no input at all: no id, no body, no query parameters. |
+| Resources | ✅ One `DashboardResource` with role-conditional sections, nesting the existing `RestaurantDocumentResource` and `RiderVehicleResource` rather than admin/dashboard variants of them |
+| Policies | ✅ — none needed; the action takes no id and reads only `$request->user()` |
+| Routes | ✅ `GET v1/dashboard` — `auth:sanctum` and no `role:` gate, on the same terms as `v1/profile*` |
+| Notifications / Events | ✅ — |
+| Feature Tests | ✅ `tests/Feature/Dashboard/DashboardTest.php` (26) — all four roles by data provider, both states of each onboarding gate, and two query-count assertions |
+| Documentation | ✅ [features/dashboards.md](features/dashboards.md), listed in `mkdocs.yml` `nav:` |
 
 Dashboards are the classic N+1 offender. Assert query counts rather than trusting review.
+
+**Four decisions worth keeping:**
+
+- **"Keep all four of MealHub's dashboard services — these genuinely differ per role" was wrong, and
+  this phase reversed it.** Read rather than assumed, three of the four are a single `findById`
+  wrapper and the fourth adds two derived booleans. The difference is a `match` arm, not a class —
+  the same collapse `AuthService`, `ProfileService`, `NotificationService` and
+  `UserManagementService` each made. That is now four phases in a row where the reference app's
+  per-role split turned out to be an artifact of per-role Blade guards, so the default for any
+  remaining phase should be **one role-parameterized class until the code proves otherwise**.
+- **The dashboard is not a second profile endpoint.** Nearly everything those four Blade dashboards
+  render is the profile pane, which `GET v1/profile` already serves; a payload that repeated the
+  address and the three location rows would be a second place to change every time the profile grows
+  a field. What ships is an identity block, the unread badge, and the role's onboarding gate — and a
+  test asserts the profile-only keys stay *absent*, because an absence nothing checks does not hold.
+- **`UserRepository` gained the count, and no `DashboardRepository` was built.** `app/Repositories/`
+  holds one class per *model*, and a tally of `users` rows is a `users` query — the same reasoning
+  that put `paginateByRole()` there in Phase 11 rather than building three role repositories.
+- **The phase found a determinism bug in Phase 8 code and fixed it.**
+  `RiderVehicleRepository::forRider()` ordered by `latest()` alone, whose column has one-second
+  resolution — so two rows written in the same second left "newest wins" to whatever order the
+  engine returned, and `AdminUserResource::vehicle()` (which sorts by id) could disagree with it. It
+  now tie-breaks on `id`, like `paginateByRole()` already did. A test that creates two vehicle rows
+  is what surfaced it; nothing in Phase 8 or 11 had.
 
 ---
 
