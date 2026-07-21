@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\User;
 use App\Notifications\OtpNotification;
+use App\Repositories\UserRepository;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -11,6 +12,10 @@ use Illuminate\Validation\ValidationException;
 class AuthService
 {
     private const OTP_TTL_MINUTES = 10;
+
+    public function __construct(
+        private readonly UserRepository $users,
+    ) {}
 
     /**
      * Register a new user for the given role.
@@ -25,7 +30,7 @@ class AuthService
     {
         $isAdmin = $role === 'admin';
 
-        $user = User::create([
+        $user = $this->users->create([
             'firstName' => $data['firstName'],
             'lastName' => $data['lastName'] ?? null,
             'email' => Str::lower($data['email']),
@@ -69,13 +74,13 @@ class AuthService
             ]);
         }
 
-        $user->forceFill([
+        $this->users->update($user, [
             'is_email_verified' => true,
             'otp' => $this->consumedOtpPlaceholder(),
             'otp_expires_at' => null,
-        ])->save();
+        ]);
 
-        return [$user, $user->createToken('auth-token')->plainTextToken];
+        return [$user, $this->users->issueToken($user, 'auth-token')];
     }
 
     /**
@@ -105,7 +110,7 @@ class AuthService
             ]);
         }
 
-        return [$user, $user->createToken('auth-token')->plainTextToken];
+        return [$user, $this->users->issueToken($user, 'auth-token')];
     }
 
     /**
@@ -122,10 +127,10 @@ class AuthService
             return;
         }
 
-        $user->forceFill([
+        $this->users->update($user, [
             'otp' => $this->generateOtp(),
             'otp_expires_at' => now()->addMinutes(self::OTP_TTL_MINUTES),
-        ])->save();
+        ]);
 
         $user->notify(new OtpNotification($user->otp, 'password_reset'));
     }
@@ -143,14 +148,14 @@ class AuthService
             ]);
         }
 
-        $user->forceFill([
+        $this->users->update($user, [
             'password' => $password,
             'otp' => $this->consumedOtpPlaceholder(),
             'otp_expires_at' => null,
-        ])->save();
+        ]);
 
         // Invalidate existing sessions since the password just changed.
-        $user->tokens()->delete();
+        $this->users->revokeAllTokens($user);
     }
 
     /**
@@ -158,14 +163,12 @@ class AuthService
      */
     public function logout(User $user): void
     {
-        $user->currentAccessToken()->delete();
+        $this->users->revokeCurrentToken($user);
     }
 
     private function findByEmailAndRole(string $email, string $role): ?User
     {
-        return User::where('role', $role)
-            ->where('email', Str::lower($email))
-            ->first();
+        return $this->users->findByEmailAndRole(Str::lower($email), $role);
     }
 
     private function otpIsValid(User $user, string $otp): bool

@@ -16,7 +16,7 @@ HTTP Request
   → Form Request        validation + authorization
   → Controller          delegate only
   → Service             business rules, transactions
-  → Repository          Eloquent queries          ← not built yet, see below
+  → Repository          Eloquent queries
   → Model               schema, relationships, casts
   → API Resource        response shape
   → ApiResponse trait   envelope
@@ -34,14 +34,40 @@ HTTP Response
 | **Model** | Schema, relationships, casts, query scopes | Business workflows, HTTP concerns, presentation |
 | **API Resource** | Field selection, formatting, URL resolution | Business logic, DB queries |
 
-### Repository tier status
+### Repository tier
 
-⚠️ **Decided but not yet built.** `app/Repositories/` does not exist and
-`AuthService` still queries Eloquent directly. The tier was adopted so that porting
-the reference app's services stays mechanical. Until Phase 0 of
-[roadmap.md](roadmap.md) lands, **`AuthService` is not a template for the repository
-split** — write new code against the table above, and document existing code as it
-actually is.
+**Built.** `app/Repositories/` exists and `AuthService` goes through `UserRepository`
+for every read and write — including Sanctum token issuance and revocation, so no
+service performs persistence directly. It is the reference implementation of the
+split; follow it when adding a domain.
+
+Concrete repositories extend the abstract `BaseRepository`, which owns the generic
+`find` / `findOrFail` / `all` / `paginate` / `create` / `update` / `delete` shape.
+A concrete class therefore declares only two things: its model, and the queries that
+are genuinely specific to it.
+
+```php
+/**
+ * @extends BaseRepository<User>
+ */
+class UserRepository extends BaseRepository
+{
+    protected function model(): string
+    {
+        return User::class;
+    }
+
+    public function findByEmailAndRole(string $email, string $role): ?User
+    {
+        return $this->query()->where('role', $role)->where('email', $email)->first();
+    }
+}
+```
+
+This is one deliberate improvement over the reference app, which has no
+`BaseRepository` and copy-pastes the CRUD methods across all seventeen classes.
+Repositories arrive with the domain that needs them — see the per-phase table in
+[roadmap.md](roadmap.md).
 
 ## Dependency injection
 
@@ -91,7 +117,7 @@ public function verifyOtp(VerifyOtpRequest $request): JsonResponse
 | Anti-pattern | Belongs in |
 | --- | --- |
 | `$request->validate([...])` inline | a Form Request |
-| `User::where(...)->first()` | a repository (or service, until Phase 0) |
+| `User::where(...)->first()` | a repository |
 | Password hashing, token issuance, OTP generation | a service |
 | `DB::transaction()` | a service |
 | `Mail::send()` / `$user->notify()` | a service |
@@ -139,7 +165,15 @@ errors are reshaped into the same envelope for every `api/*` route by
 { "success": false, "message": "Error", "errors": { "field": ["..."] } }
 ```
 
-Status codes still carry meaning — the envelope does not replace them. See
+Lists go through `paginatedResponse()`, which lifts the rows to `data` and the
+paginator state to a sibling `meta` — so `data` means the same thing on a list
+endpoint as on a single-record one. Deletes return `noContentResponse()` (204, empty
+body). Services raise expected failures as `App\Exceptions\DomainException`, never
+`abort()`.
+
+Status codes still carry meaning — the envelope does not replace them. The full wire
+contract, including the pagination shape and every error status, is
+[features/api-conventions.md](features/api-conventions.md); see
 [postman-testing.md](postman-testing.md) for the codes each endpoint returns.
 
 ## Naming

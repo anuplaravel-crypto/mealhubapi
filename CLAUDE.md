@@ -209,16 +209,15 @@ Controllers must only: validate (via a Form Request), delegate to a service, and
 | Service | business rules, transactions, orchestrating repositories | direct `Model::query()` |
 | Repository | Eloquent queries only; returns models/collections | business rules, Request/Response objects, mail |
 
-⚠️ **The repository tier is a decision, not yet a reality.** `app/Repositories/` does not exist and `AuthService` still queries Eloquent directly. The tier was adopted to match the reference app [MealHub](../MealHub), whose own CLAUDE.md mandates `Controller → Service → Repository`; porting its 43 services is mechanical only if both sides have the same layering. Until Phase 0 of [docs/roadmap.md](docs/roadmap.md) lands, **`AuthService` is not a template for the repository split** — read the roadmap before adding a domain.
-
-The **authentication module is the established reference implementation** of the controller/service/Form Request/Resource split — follow its structure for new domains (see `app/Http/Controllers/Api/V1/Auth/`, `app/Services/AuthService.php`, and [docs/controllers.md](docs/controllers.md)).
+The **authentication module is the established reference implementation** of the controller/service/repository/Form Request/Resource split — follow its structure for new domains (see `app/Http/Controllers/Api/V1/Auth/`, `app/Services/AuthService.php`, `app/Repositories/UserRepository.php`, and [docs/controllers.md](docs/controllers.md)).
 
 - `app/Http/Controllers/Api/{Version}/` — versioned API controllers. **Versioning has started at `V1`**; put new versioned controllers under `app/Http/Controllers/Api/V1/`, grouped in a sub-namespace by domain when a domain has several (e.g. `Api/V1/Auth/`). Share behavior across related controllers via an abstract base controller rather than copy-paste (see `Auth/BaseAuthController`).
 - `app/Services/` — business logic lives here, injected via constructor property promotion. `AuthService` is the current domain example; one service per domain concern. (`app/Services/Docs/` is a separate non-domain tooling engine behind `docs:generate` — see "Documentation" — not a template for domain services.)
-- `app/Repositories/` — **does not exist yet**; every Eloquent query per domain will live here, one class per model, behind an abstract `BaseRepository`. See the tier table above and Phase 0 of [docs/roadmap.md](docs/roadmap.md).
+- `app/Repositories/` — every Eloquent query lives here, one class per model, extending the abstract `BaseRepository` (which owns the generic `find`/`findOrFail`/`all`/`paginate`/`create`/`update`/`delete` shape, so concrete classes declare only their model and their genuinely specific queries). `UserRepository` is the current example. Repositories return models and collections — never arrays, never DTOs. Repositories arrive with the domain that needs them; see the per-phase table in [docs/roadmap.md](docs/roadmap.md).
 - `app/Http/Requests/` — one Form Request per validated action, grouped by domain (e.g. `app/Http/Requests/Auth/`). Controllers must not call `$request->validate()` inline. `authorize()` returns `true` for public/pre-auth endpoints.
 - `app/Http/Resources/` — every API response that returns a model or collection goes through an Eloquent API Resource (`UserResource` is the current example). Controllers must not return raw models or arrays built ad hoc.
 - `app/Http/Traits/` — shared HTTP concerns (currently the `ApiResponse` envelope trait; see "Consistent JSON API Responses" below).
+- `app/Exceptions/` — `DomainException` is the base for expected business-rule failures. Services throw it with an explicit status instead of calling `abort()` (an HTTP concern) or throwing `ValidationException` for a failure that is not a validation failure.
 - `app/Notifications/` — mail/database notifications (currently `OtpNotification`, used for registration and password-reset OTP emails).
 - `app/Models/` — Eloquent models. Use the `casts()` method (not the `$casts` property) for new casts, per Laravel 12 convention. See [docs/models.md](docs/models.md) for the current schema and relationships.
 
@@ -256,6 +255,12 @@ Error:
 
 Use standard HTTP status codes (200/201/204, 401/403/404/422, 500) alongside the envelope — the envelope does not replace status codes.
 
+Three more rules the trait enforces; the full wire contract is [docs/features/api-conventions.md](docs/features/api-conventions.md):
+
+- **Lists go through `paginatedResponse()`**, which lifts the rows to `data` and the paginator state to a sibling `meta`. Never pass a paginator to `successResponse()` — the client would read `data.data[0]`.
+- **`errorResponse($message, $status, $errors = null)` takes its status as a required second argument.** It has no default; a forgotten status used to silently report 403s and 404s as 422s.
+- **Deletes and other command-style endpoints return `noContentResponse()`** — 204 with an empty body.
+
 ## Authentication (Sanctum)
 
 - API auth uses Sanctum personal access tokens unless a task explicitly calls for SPA cookie-based auth for the React frontend.
@@ -292,7 +297,7 @@ See [docs/models.md](docs/models.md) (auto-generated) for the full field list.
 
 - Every API endpoint (each route + each meaningful outcome: happy path, validation failure, authorization failure, not-found) needs a Feature test under `tests/Feature/`. Follow the existing PHPUnit conventions in this file (already using `--phpunit` style tests per the Boost rules above).
 - Use model factories for all test data; add factory states instead of manually overriding attributes inline when a pattern repeats.
-- Do not consider a feature done until its tests exist and pass. The full **Definition of Done** (architecture, security, tests, docs) lives in [docs/roadmap.md](docs/roadmap.md) — it is the checklist, not this file.
+- Do not consider a feature done until its tests exist and pass — see the Definition of Done below.
 - `tests/Feature/Database/` runs on **SQLite**, which ignores varchar limits. Run `php artisan migrate:fresh --seed` against MySQL before trusting a new factory or migration.
 
 ## Documentation
@@ -303,6 +308,40 @@ The `docs/` tree is the project's living documentation, rendered as a site with 
 - **Hand-written per-feature docs** (`docs/features/<feature>.md`) — one per domain concern, maintained by the `/project-docs` skill. For every feature, add/update: what it does and why, endpoints, request/response shape (reference the Form Request and Resource), and business rules/edge cases. These carry the intent the generator can't introspect.
 - **[docs/roadmap.md](docs/roadmap.md)** — the MealHub → MealHubApi migration plan: what is already ported, the phase order, per-domain file checklists, and the **Definition of Done** every phase must satisfy. Hand-written, not owned by `/project-docs` or the generator. Consult it before starting a new domain; update it when a phase completes or the plan changes.
 - A **`.githooks/pre-commit`** reminder warns (non-blocking) when code under `app/`, `routes/`, or `database/migrations/` is staged without any **`docs/features/`** change. It deliberately ignores the auto-generated reference docs — the PostToolUse hook regenerates those on every edit, so counting them would silence the reminder permanently. Enable per-clone with `git config core.hooksPath .githooks`.
+
+## Definition of Done
+
+No feature or roadmap phase is complete until every box is ticked. This is the checklist for every session — [docs/roadmap.md](docs/roadmap.md) carries the same list plus the per-phase file inventory.
+
+**Architecture**
+
+- [ ] Controllers contain no business logic — validate, delegate, respond
+- [ ] Services contain no direct `Model::query()` — all data access goes through a repository
+- [ ] Repositories contain no business rules, and no `Request`/`Response`/mail/events
+- [ ] Every validated action has its own Form Request (no inline `$request->validate()`)
+- [ ] Every model or collection response passes through an API Resource
+- [ ] Existing services, repositories, scopes and traits were searched before writing new ones
+
+**Security**
+
+- [ ] Every route carries the correct middleware (`auth:sanctum` plus `role:*` where applicable)
+- [ ] Ownership is verified by a Policy wherever an ID arrives from the URL
+- [ ] A test asserts 403 for a token of the wrong role
+
+**Tests**
+
+- [ ] Each endpoint covers happy path, validation failure, auth failure, and not-found
+- [ ] `php artisan test --compact` is green
+- [ ] Test data comes from factories, not inline attribute overrides
+- [ ] `php artisan migrate:fresh --seed` run against **MySQL** — SQLite ignores varchar limits
+
+**Quality and documentation**
+
+- [ ] `vendor/bin/pint --dirty --format agent`
+- [ ] `docs/features/<name>.md` created or updated (`/project-docs`)
+- [ ] `php artisan docs:generate --check` passes
+- [ ] No N+1 — query counts asserted on list and dashboard endpoints
+- [ ] One phase, one commit (`/commit-push`)
 
 ## Don't Duplicate Code
 

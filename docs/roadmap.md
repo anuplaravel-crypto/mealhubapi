@@ -39,7 +39,7 @@ repository layer). **That decision has been reversed**: the repository layer is 
 consistent with the reference project and make porting mechanical rather than interpretive.
 
 MealHub's CLAUDE.md mandates `Controller → Service → Repository`; MealHubApi's did not mention
-repositories at all. Phase 0 amends MealHubApi's CLAUDE.md so the two agree — without that edit
+repositories at all. Phase 0 amended MealHubApi's CLAUDE.md so the two agree — without that edit
 a future session will "helpfully" collapse the layer back into services.
 
 | Tier | Does | Must not do |
@@ -80,10 +80,22 @@ The moment Phase 10 or 11 lands, this becomes "any logged-in customer can edit t
 
 ---
 
-## Phase 0 — Foundations
+## Phase 0 — Foundations ✅ Complete
 
 No endpoints, so the API stays green by definition. Passing condition: the existing auth tests
-still pass.
+still pass — they do (`php artisan test --compact`: 75 passed).
+
+Delivered: `app/Repositories/{BaseRepository,UserRepository}.php` (with `AuthService` rewired
+through `UserRepository`), `paginatedResponse()` / `noContentResponse()` / required-status
+`errorResponse()` on the `ApiResponse` trait, `App\Exceptions\DomainException` plus four render
+callbacks in `bootstrap/app.php`, `tests/Feature/Api/{ResponseEnvelopeTest,ExceptionEnvelopeTest}.php`,
+and [features/api-conventions.md](features/api-conventions.md).
+
+**One deviation from the plan below:** `PasswordResetRepository` was **not** built. MealHub's
+version reads and writes the `password_reset_tokens` table, which **MealHubApi does not have** —
+password reset here is OTP-based on the `users` table (`otp` / `otp_expires_at`), so
+`UserRepository` already covers it. Building the class would have meant queries against a
+non-existent table. Do not add it in Phase 1; drop the reference and use `UserRepository`.
 
 ### 0.1 Repository layer
 
@@ -106,12 +118,13 @@ One deliberate improvement over MealHub: MealHub has no `BaseRepository`, so
 `BaseRepository` here — concrete classes then declare only their model and their genuinely
 specific queries (`published()`, `nextSortOrder()`).
 
-**Build in Phase 0:** `BaseRepository`, `UserRepository`, `PasswordResetRepository` (Phase 1
-depends on them). The rest arrive with their domain — see the table below.
+**Built in Phase 0:** `BaseRepository`, `UserRepository` (Phase 1 depends on them).
+`PasswordResetRepository` was dropped — see the deviation note above. The rest arrive with their
+domain — see the table below.
 
 | Repository | Phase |
 | --- | --- |
-| `UserRepository`, `PasswordResetRepository` | 0 → 1 |
+| `UserRepository` | 0 → 1 |
 | `LocationRepository` | 2 |
 | `Cms/*` (8 classes) | 3 (read) → 10 (write) |
 | `NotificationRepository` | 6 |
@@ -124,7 +137,8 @@ depends on them). The rest arrive with their domain — see the table below.
 Already implemented: `App\Http\Traits\ApiResponse` — `successResponse()` / `errorResponse()`
 producing `{success, data, message}` and `{success, message, errors}`.
 
-Three gaps to close before Phase 6 introduces the first paginated list:
+Three gaps, all closed in Phase 0 and documented in
+[features/api-conventions.md](features/api-conventions.md):
 
 1. **No pagination support.** Passing a paginator to `successResponse()` nests Laravel's own
    `{data, links, meta}` inside `data`, so the client sees `data.data.data`. Add
@@ -141,7 +155,7 @@ the contract MealHubReact codes against.
 Already implemented: `bootstrap/app.php` `withExceptions` → `shouldRenderJsonWhen` + `respond`,
 reshaping every `api/*` error into the project envelope.
 
-Gaps found:
+Gaps found, all closed in Phase 0:
 
 1. 🔴 **`ModelNotFoundException` leaks the internal class name.** A failed route-model binding
    returns `No query results for model [App\Models\User] 5`. Phase 2 introduces the first bound
@@ -154,6 +168,19 @@ Gaps found:
    `ValidationException`.
 5. **Pin the production 500 shape** with a test asserting no stack trace escapes when
    `APP_DEBUG=false`.
+
+Two implementation notes for whoever touches the handler next:
+
+- **Type-hint against the *prepared* exception.** `Handler::render()` runs
+  `prepareException()` *before* the `render()` callbacks, so `ModelNotFoundException` has already
+  become `NotFoundHttpException` and `AuthorizationException` has become
+  `AccessDeniedHttpException` by the time a callback sees it. Type-hinting the original class
+  means the callback silently never fires. The 404 callback therefore covers every `api/*`
+  `NotFoundHttpException`, unknown routes included — all of them answer `Resource not found.`
+- **`respond()` passes through anything already enveloped** (any body with a `success` key), so
+  the `render()` callbacks keep their extra keys (`retry_after`) and headers (`Retry-After`).
+  Without that guard `respond()` would rebuild the body as `{success, message, errors}` and drop
+  them.
 
 ### 0.4 CLAUDE.md amendments
 
@@ -176,7 +203,7 @@ Everything later sits behind this, and it closes the authorization hole.
 | --- | --- |
 | Controllers | Extend `Api/V1/Auth/BaseAuthController` with `resendOtp()`, `changePassword()`. New `Api/V1/Auth/MobileOtpController` (ports `Frontend\AuthController@sendMobileOtp` / `verifyMobileOtp`). |
 | Services | Extend `AuthService`. Do **not** add per-role services — MealHub's four `Auth/*AuthService` classes are already correctly collapsed into one role-parameterized service. |
-| Repositories | `UserRepository`, `PasswordResetRepository` (from Phase 0) wired into `AuthService` |
+| Repositories | ✅ `UserRepository` (Phase 0) already wired into `AuthService`; extend it for the mobile-OTP lookups |
 | Models | ✅ `User` |
 | FormRequests | `Auth/ChangePasswordRequest`, `Auth/ResendOtpRequest`, `Auth/SendMobileOtpRequest`, `Auth/VerifyMobileOtpRequest` (all exist in MealHub) |
 | Resources | ✅ `UserResource` |

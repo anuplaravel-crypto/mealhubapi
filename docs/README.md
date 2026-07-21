@@ -20,5 +20,6 @@ php artisan docs:generate
 
 One per domain concern under `docs/features/`. These are **not** auto-generated — they carry the "why" and business rules the code can't introspect.
 
+- [features/api-conventions.md](features/api-conventions.md)
 - [features/authentication.md](features/authentication.md)
 

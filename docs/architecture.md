@@ -5,7 +5,7 @@
 
 ## Module structure
 
-This is a stateless JSON REST API (no Blade views of its own). Controllers are **thin** — they validate via a Form Request, delegate to a service in `app/Services/`, and shape the response through an API Resource + the `App\Http\Traits\ApiResponse` envelope. API controllers are versioned and grouped by domain under `app/Http/Controllers/`:
+This is a stateless JSON REST API (no Blade views of its own). It is three-tier: controllers are **thin** — they validate via a Form Request, delegate to a service in `app/Services/`, and shape the response through an API Resource + the `App\Http\Traits\ApiResponse` envelope. Services hold the business rules and reach the database only through a repository in `app/Repositories/`, which contains the Eloquent queries and nothing else. API controllers are versioned and grouped by domain under `app/Http/Controllers/`:
 
 - `Api/V1/Auth/`
 
