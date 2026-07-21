@@ -73,7 +73,7 @@ it, Phase 10 or 11 would mean "any logged-in customer can edit the home page".
                                               ├─→ 9. Restaurant documents
                                               └─→ 10. Admin CMS write
                          6. Notifications ✅ ──┴─→ 11. Admin user mgmt ─→ 12. Dashboards
-                         7. Newsletter
+                         7. Newsletter ✅
                         13. Terms & conditions (net-new, backlog)
 ```
 
@@ -128,7 +128,7 @@ domain — see the table below.
 | `Cms/*` (7 read classes) | 3 (read) → 10 (write) |
 | `Cms/SectionFeatureRepository` | 10 — reads go through `HomeSectionRepository`'s eager load |
 | `NotificationRepository` | 6 ✅ |
-| `NewsletterSubscriberRepository` | 7 |
+| `NewsletterSubscriberRepository` | 7 ✅ |
 | `RiderVehicleRepository` | 8 |
 | `CustomerRepository`, `RestaurantRepository`, `RiderRepository` | 11 |
 
@@ -507,26 +507,52 @@ Blade route; there is no such URL until `FRONTEND_URL` lands in Phase 7 — the 
 
 ---
 
-## Phase 7 — Newsletter
+## Phase 7 — Newsletter ✅ Complete
+
+The first phase to email a **link** rather than a code, and therefore the one that introduces
+`FRONTEND_URL`. `php artisan test --compact`: 274 passed.
 
 | Category | Work |
 | --- | --- |
-| Controllers | `Api/V1/NewsletterController` — `subscribe` (public), `confirm(token)`, `unsubscribe(token)`; `Api/V1/Admin/NewsletterController` — `index`, `destroy` |
-| Services | `Newsletter/NewsletterService` (port) |
-| Repositories | `NewsletterSubscriberRepository` (port) |
-| Models | ✅ `NewsletterSubscriber` — double opt-in, with `status` / `is_mailable` derived from the two timestamps and never stored. Preserve this. |
-| FormRequests | `Newsletter/SubscribeRequest` (port) |
-| Resources | `NewsletterSubscriberResource` |
-| Policies | — (admin routes use the Phase 1 `role:admin` middleware) |
-| Routes | `POST v1/newsletter/subscribe` (public, throttled), `GET v1/newsletter/confirm/{token}`, `GET v1/newsletter/unsubscribe/{token}`, `v1/admin/newsletter*` |
-| Notifications | `NewsletterConfirmationNotification` (port) |
+| Controllers | ✅ `Api/V1/NewsletterController` — `subscribe`, `confirm(token)`, `unsubscribe(token)`; ✅ `Api/V1/Admin/NewsletterController` — `index`, `destroy`, **the first controller under `Api/V1/Admin/`** |
+| Services | ✅ `NewsletterService` — flat under `app/Services/`, matching `AuthService`/`LocationService`/`ProfileService`/`NotificationService`, not the `Services/Newsletter/` sub-namespace above. One class is not a sub-namespace. |
+| Repositories | ✅ `NewsletterSubscriberRepository`, rebased on `BaseRepository<NewsletterSubscriber>` — plus `paginateLatest()`, since the base `paginate()` applies no ordering |
+| Models | ✅ `NewsletterSubscriber` — double opt-in, `status` / `is_mailable` derived from the two timestamps and never stored. Preserved. |
+| FormRequests | ✅ `Newsletter/SubscribeRequest`. MealHub's `failedValidation()` override was **not** ported — the handler in `bootstrap/app.php` already shapes 422. |
+| Resources | ✅ `NewsletterSubscriberResource` — one class for both the public and admin surfaces; `token` is never exposed by either |
+| Policies | — (`role:admin` suffices; a subscriber has no owner. See the note below.) |
+| Routes | ✅ `POST v1/newsletter/subscribe` (throttle 5/1), `POST v1/newsletter/confirm/{token}`, `POST v1/newsletter/unsubscribe/{token}` (throttle 10/1), `v1/admin/newsletter*` |
+| Notifications | ✅ `NewsletterConfirmationNotification` — flat under `app/Notifications/`, not MealHub's `Notifications/Newsletter/`. Sent to the subscriber row itself, which is `Notifiable` for exactly this reason. |
 | Events | — |
-| Feature Tests | `tests/Feature/Newsletter/` — subscribe, duplicate email, confirm with valid/invalid/expired token, unsubscribe, admin list and delete. Port MealHub's `NewsletterSubscriptionTest`. |
-| Documentation | New `docs/features/newsletter.md` |
+| Feature Tests | ✅ `tests/Feature/Newsletter/NewsletterSubscriptionTest.php` (17) and `AdminNewsletterTest.php` (15), including the query-count assertion |
+| Documentation | ✅ [features/newsletter.md](features/newsletter.md), listed in `mkdocs.yml` `nav:` |
 
-**SPA constraint:** confirm and unsubscribe links land in an email. They must point at the React
-app, which then calls the API — pointing them at the API directly shows the user raw JSON.
-Introduce a `FRONTEND_URL` env value in this phase.
+**Deviation: `confirm` and `unsubscribe` are `POST`, not the `GET` planned above.** The plan's verb
+was MealHub's, where a mail client opened those URLs directly. The `FRONTEND_URL` indirection this
+phase introduces removes that constraint — the emailed link lands on the SPA, which then calls the
+API — so the verb is free to be the correct one for a state change, and is no longer triggerable by
+anything that merely follows a link (a crawler, a link preview, a mail-client prefetch). Path and
+token placement are unchanged.
+
+**`FRONTEND_URL` landed as `config('app.frontend_url')`**, falling back to `app.url` when unset so a
+same-origin deployment still emits an absolute link. This is what unblocks the two deferred link
+features called out in Phases 1 and 6 — the dashboard link in the activation email, and any future
+link-based flow. Neither was added here; they belong to the phases that own them.
+
+**One id-taking route with no Policy, deliberately.** `DELETE v1/admin/newsletter/{subscriber}`
+takes an id from the URL, which the Definition of Done normally answers with a Policy. A subscriber
+has no owner to compare the caller against, so `role:admin` *is* the whole authorization question —
+the same shape as Phase 10's CMS records. The rule that still binds: anything with an **owner**
+needs a Policy.
+
+**No `migrate:fresh --seed` was needed**: this phase adds no migration and no factory. The
+`newsletter_subscribers` table, its factory and its four states all shipped with the data layer and
+are already pinned by `FactoryIntegrityTest`.
+
+**One thing worth copying next phase:** MealHub's named `newsletter` rate limiter existed mostly to
+reshape the 429 body into its own JSON envelope. Phase 0's handler already does that for every
+`api/*` route, including `retry_after`, so an inline `throttle:5,1` was enough and
+`AppServiceProvider` went untouched.
 
 ---
 

@@ -295,8 +295,6 @@
 **File:** `app/Models/NewsletterSubscriber.php`  
 **Table:** `newsletter_subscribers`
 
-> Not referenced by any routed controller found — this model has no active read/write path today.
-
 **Columns** (live schema)
 
 | Column | Type | Nullable |

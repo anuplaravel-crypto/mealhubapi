@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\V1\Admin\NewsletterController as AdminNewsletterController;
 use App\Http\Controllers\Api\V1\Auth\AdminAuthController;
 use App\Http\Controllers\Api\V1\Auth\CustomerAuthController;
 use App\Http\Controllers\Api\V1\Auth\RestaurantAuthController;
@@ -7,6 +8,7 @@ use App\Http\Controllers\Api\V1\Auth\RiderAuthController;
 use App\Http\Controllers\Api\V1\HomeController;
 use App\Http\Controllers\Api\V1\LocationController;
 use App\Http\Controllers\Api\V1\MediaController;
+use App\Http\Controllers\Api\V1\NewsletterController;
 use App\Http\Controllers\Api\V1\NotificationController;
 use App\Http\Controllers\Api\V1\ProfileController;
 use Illuminate\Support\Facades\Route;
@@ -124,5 +126,54 @@ Route::prefix('v1')->name('api.v1.')->group(function () use ($registerAuthRoutes
             Route::patch('{notification}/read', 'markAsRead')->name('read');
             Route::patch('{notification}/toggle-read', 'toggleRead')->name('toggle-read');
             Route::delete('{notification}', 'destroy')->name('destroy');
+        });
+
+    /*
+    |----------------------------------------------------------------------
+    | Newsletter (public)
+    |----------------------------------------------------------------------
+    |
+    | Double opt-in: an address is not on the list until the person who owns
+    | it confirms from the emailed link. All three are anonymous — a
+    | subscriber has no account, and the token is what proves anything.
+    |
+    | The two link endpoints are POST rather than the roadmap's GET. The
+    | emailed link lands on the SPA, which then calls the API, so nothing
+    | requires these to be reachable by a browser following a URL — and a
+    | state change that a crawler or link preview can trigger is exactly
+    | what a GET here would be.
+    |
+    | Throttled per IP by the default `throttle` behavior for guests.
+    | Signup is the tighter limit: it is the one that costs a real person an
+    | unsolicited email. Guessing a 64-character token is not the threat the
+    | limit on the other two answers — repeated automated calls are.
+    |
+    */
+    Route::controller(NewsletterController::class)
+        ->prefix('newsletter')
+        ->name('newsletter.')
+        ->group(function () {
+            Route::post('subscribe', 'subscribe')->middleware('throttle:5,1')->name('subscribe');
+            Route::post('confirm/{token}', 'confirm')->middleware('throttle:10,1')->name('confirm');
+            Route::post('unsubscribe/{token}', 'unsubscribe')->middleware('throttle:10,1')->name('unsubscribe');
+        });
+
+    /*
+    |----------------------------------------------------------------------
+    | Newsletter administration
+    |----------------------------------------------------------------------
+    |
+    | Read and delete only — there is deliberately no admin "add subscriber".
+    | `role:admin` is the whole authorization question here: a subscriber has
+    | no owner, so the id on the delete route needs no Policy to scope it.
+    |
+    */
+    Route::middleware(['auth:sanctum', 'role:admin'])
+        ->controller(AdminNewsletterController::class)
+        ->prefix('admin/newsletter')
+        ->name('admin.newsletter.')
+        ->group(function () {
+            Route::get('/', 'index')->name('index');
+            Route::delete('{subscriber}', 'destroy')->name('destroy');
         });
 });

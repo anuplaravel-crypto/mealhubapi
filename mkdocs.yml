@@ -63,6 +63,7 @@ nav:
       - Media Uploads: features/media-uploads.md
       - Profile: features/profile.md
       - Notifications: features/notifications.md
+      - Newsletter: features/newsletter.md
 
   - Testing:
       - Postman Testing: postman-testing.md

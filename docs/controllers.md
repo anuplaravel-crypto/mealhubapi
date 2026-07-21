@@ -4,6 +4,22 @@
 
 Only controllers reachable from a registered route are documented here — see [routes.md](routes.md) for the full route table.
 
+## Api\V1\Admin\NewsletterController
+
+**File:** `app/Http/Controllers/Api/V1/Admin/NewsletterController.php`
+
+### `destroy(NewsletterSubscriber $subscriber): JsonResponse`
+
+Erase a subscriber outright, for an erasure request.
+
+
+### `index(): JsonResponse`
+
+The subscriber list, newest signup first, one page at a time.
+
+
+---
+
 ## Api\V1\Auth\AdminAuthController
 
 **File:** `app/Http/Controllers/Api/V1/Auth/AdminAuthController.php`
@@ -388,6 +404,33 @@ Admins register with a reduced field set and are created pre-verified,
 ### `show(Request $request): StreamedResponse`
 
 Stream the authenticated user's own profile picture.
+
+
+---
+
+## Api\V1\NewsletterController
+
+**File:** `app/Http/Controllers/Api/V1/NewsletterController.php`
+
+### `confirm(string $token): JsonResponse`
+
+Confirm a signup from its emailed token. Idempotent — a second call is a
+
+
+### `subscribe(SubscribeRequest $request): JsonResponse`
+
+Take a signup. Throttled on the route; deliberately returns no data.
+
+**Request body**
+
+| Field | Rules |
+|---|---|
+| email | `required|string|email:filter|max:191` |
+
+
+### `unsubscribe(string $token): JsonResponse`
+
+Opt an address out. Also idempotent, and works whether or not the address
 
 
 ---

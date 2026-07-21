@@ -12,6 +12,8 @@ Every application route is defined in `routes/api.php` and auto-prefixed with `/
 | POST | `/api/v1/admin/forgot-password` | api.v1.admin.forgot-password | AdminAuthController@forgotPassword | api, throttle:6,1 |
 | POST | `/api/v1/admin/login` | api.v1.admin.login | AdminAuthController@login | api, throttle:6,1 |
 | POST | `/api/v1/admin/logout` | api.v1.admin.logout | AdminAuthController@logout | api, auth:sanctum, role:admin |
+| GET | `/api/v1/admin/newsletter` | api.v1.admin.newsletter.index | NewsletterController@index | api, auth:sanctum, role:admin |
+| DELETE | `/api/v1/admin/newsletter/{subscriber}` | api.v1.admin.newsletter.destroy | NewsletterController@destroy | api, auth:sanctum, role:admin |
 | POST | `/api/v1/admin/registration` | api.v1.admin.registration | AdminAuthController@register | api |
 | POST | `/api/v1/admin/resend-otp` | api.v1.admin.resend-otp | AdminAuthController@resendOtp | api, throttle:6,1 |
 | POST | `/api/v1/admin/reset-password` | api.v1.admin.reset-password | AdminAuthController@resetPassword | api, throttle:6,1 |
@@ -58,6 +60,9 @@ Every application route is defined in `routes/api.php` and auto-prefixed with `/
 | POST | `/api/v1/login` | api.v1.customer.login | CustomerAuthController@login | api, throttle:6,1 |
 | POST | `/api/v1/logout` | api.v1.customer.logout | CustomerAuthController@logout | api, auth:sanctum, role:customer |
 | GET | `/api/v1/media/profile-picture` | api.v1.media.profile-picture | MediaController@show | api, auth:sanctum |
+| POST | `/api/v1/newsletter/confirm/{token}` | api.v1.newsletter.confirm | NewsletterController@confirm | api, throttle:10,1 |
+| POST | `/api/v1/newsletter/subscribe` | api.v1.newsletter.subscribe | NewsletterController@subscribe | api, throttle:5,1 |
+| POST | `/api/v1/newsletter/unsubscribe/{token}` | api.v1.newsletter.unsubscribe | NewsletterController@unsubscribe | api, throttle:10,1 |
 | GET | `/api/v1/notifications` | api.v1.notifications.index | NotificationController@index | api, auth:sanctum |
 | PATCH | `/api/v1/notifications/read-all` | api.v1.notifications.read-all | NotificationController@markAllAsRead | api, auth:sanctum |
 | GET | `/api/v1/notifications/unread` | api.v1.notifications.unread | NotificationController@unread | api, auth:sanctum |
